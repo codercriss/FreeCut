@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 1,
+  "id": "fixture-v1",
+  "name": "Frozen v1 fixture",
+  "createdAt": 1760000000000,
+  "updatedAt": 1760000000000,
+  "settings": {
+    "fps": 60,
+    "width": 1920,
+    "height": 1080,
+    "ratio": "16:9"
+  },
+  "assets": [
+    {
+      "id": "asset-moraine",
+      "kind": "video",
+      "name": "Moraine Lake.mov",
+      "durationFrames": 1678,
+      "width": 1920,
+      "height": 1080,
+      "source": {
+        "type": "generated",
+        "scene": "ve-sc-moraine",
+        "thumb": "ve-sc-moraine-lite"
+      }
+    },
+    {
+      "id": "asset-cave",
+      "kind": "video",
+      "name": "CRST001334.mov",
+      "durationFrames": 1260,
+      "width": 1920,
+      "height": 1080,
+      "source": {
+        "type": "generated",
+        "scene": "ve-sc-cave",
+        "thumb": "ve-sc-cave"
+      }
+    },
+    {
+      "id": "asset-ocean",
+      "kind": "video",
+      "name": "CRST001334.mov",
+      "durationFrames": 2340,
+      "width": 1920,
+      "height": 1080,
+      "source": {
+        "type": "generated",
+        "scene": "ve-sc-ocean",
+        "thumb": "ve-sc-ocean"
+      }
+    },
+    {
+      "id": "asset-bay",
+      "kind": "video",
+      "name": "CRST001334.mov",
+      "durationFrames": 2040,
+      "width": 1920,
+      "height": 1080,
+      "source": {
+        "type": "generated",
+        "scene": "ve-sc-bay",
+        "thumb": "ve-sc-bay"
+      }
+    },
+    {
+      "id": "asset-mist",
+      "kind": "video",
+      "name": "CRST001334.mov",
+      "durationFrames": 600,
+      "width": 1920,
+      "height": 1080,
+      "source": {
+        "type": "generated",
+        "scene": "ve-sc-mist",
+        "thumb": "ve-sc-mist"
+      }
+    },
+    {
+      "id": "asset-audio",
+      "kind": "audio",
+      "name": "Audio.aac",
+      "durationFrames": 1800,
+      "source": {
+        "type": "generated",
+        "scene": "",
+        "thumb": ""
+      }
+    }
+  ],
+  "tracks": [
+    {
+      "id": "track-overlay-1",
+      "kind": "overlay",
+      "name": "Overlay 1",
+      "muted": false,
+      "locked": false,
+      "hidden": false
+    },
+    {
+      "id": "track-main",
+      "kind": "main",
+      "name": "Main",
+      "muted": false,
+      "locked": false,
+      "hidden": false
+    },
+    {
+      "id": "track-audio-1",
+      "kind": "audio",
+      "name": "Audio 1",
+      "muted": false,
+      "locked": false,
+      "hidden": false
+    }
+  ],
+  "clips": [
+    {
+      "transform": {
+        "zoom": 50,
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "opacity": 100,
+      "blend": "normal",
+      "filter": {
+        "name": "90s",
+        "strength": 50
+      },
+      "effects": [
+        {
+          "id": "fx-motion-blur",
+          "type": "motion-blur",
+          "name": "Motion Blur"
+        }
+      ],
+      "sections": {
+        "filters": true,
+        "effects": true,
+        "transform": true,
+        "blend": true
+      },
+      "id": "clip-main",
+      "trackId": "track-main",
+      "assetId": "asset-moraine",
+      "start": 0,
+      "duration": 1678,
+      "sourceIn": 0,
+      "speed": 1
+    },
+    {
+      "transform": {
+        "zoom": 50,
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "opacity": 100,
+      "blend": "normal",
+      "filter": null,
+      "effects": [],
+      "sections": {
+        "filters": true,
+        "effects": true,
+        "transform": true,
+        "blend": true
+      },
+      "id": "clip-audio",
+      "trackId": "track-audio-1",
+      "assetId": "asset-audio",
+      "start": 314,
+      "duration": 602,
+      "sourceIn": 0,
+      "speed": 2
+    }
+  ],
+  "markers": []
+}
