@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover lets the editor's env(safe-area-inset-*) padding work on notched phones -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f0f10" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content="FreeCut — a browser-based video editor UI." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- iOS "Add to Home Screen": full-screen, content under the status bar (edge to edge). The app pads itself with safe-area insets.
+         After changing these, delete the Home Screen icon and add it again. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="FreeCut" />
+    <title>FreeCut</title>
+    <script>
+      /* Safe-area insets only matter on iOS (notch / home indicator): flag iOS so Android and desktop always get 0. */
+      (function () {
+        var ua = navigator.userAgent || "";
+        var ios = /iPhone|iPod|iPad/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        if (ios) document.documentElement.classList.add("ios");
+        if (ios && window.navigator.standalone) document.documentElement.classList.add("standalone");
+      })();
+    </script>
+    <script>
+      /* iPhone home-screen apps can open with the visible area one status-bar-height short at the bottom, and only correct
+         themselves after a scroll gesture. Two guards: (1) the page is always taller than the screen (body rule below), so it is
+         never "too short to scroll"; (2) once the app is on screen we scroll 1px and back, which is the same event a swipe causes.
+         The editor itself is position:fixed, so it simply follows the corrected viewport. */
+      (function () {
+        if (!window.navigator.standalone) return;
+        function nudge() {
+          var y = window.pageYOffset || 0;
+          window.scrollTo(0, y + 1);
+          requestAnimationFrame(function () { window.scrollTo(0, y); });
+        }
+        window.addEventListener("load", function () { setTimeout(nudge, 60); setTimeout(nudge, 400); });
+        document.addEventListener("visibilitychange", function () {
+          if (document.visibilityState === "visible") setTimeout(nudge, 60);
+        });
+      })();
+    </script>
+    <style>
+      :root { --safe-top: 0px; --safe-bottom: 0px; --page-min-h: 100dvh; }
+      /* iOS first measures the short height, so in the installed app we add the status-bar height back (+4px): the page is
+         scrollable from the very first paint, and nothing on the page stops it stretching or bouncing. */
+      html.standalone { --page-min-h: calc(100dvh + var(--safe-top) + 4px); }
+      html.ios { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); }
+      *, *::before, *::after { box-sizing: border-box; }
+      /* hide scrollbars everywhere (scrolling still works) */
+      * { scrollbar-width: none; }
+      *::-webkit-scrollbar { display: none; width: 0; height: 0; }
+      html, body, #root { margin: 0; padding: 0; }
+      /* split background (top bar colour / bottom toolbar colour): any strip iOS doesn't cover blends into the nearest bar */
+      html { min-height: 100%; background: linear-gradient(#0f0f10 50%, #1a1a1c 50%); -webkit-text-size-adjust: 100%; -webkit-touch-callout: none; }
+      /* no elastic bounce / scroll chaining from the editor to the page behind it; the page itself stays scrollable, so the iOS viewport correction still works */
+      html, body { overscroll-behavior: none; }
+      /* every inner scroller too (timeline, sheets, grids): no rubber-band at their ends and no chaining to the page */
+      * { overscroll-behavior: none; }
+      body { min-height: 100vh; min-height: var(--page-min-h); background: transparent; }
+      #root { min-height: 100%; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
