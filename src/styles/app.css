@@ -1,0 +1,86 @@
+/* App-shell bits that belong to neither Home nor the editor: boot splash, storage warning, crash screen. */
+.fc-boot {
+  position: fixed;
+  inset: 0;
+  background: #0f0f10;
+}
+
+.fc-warn {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  top: calc(var(--safe-top, 0px) + 10px);
+  transform: translateX(-50%);
+  max-width: min(560px, calc(100vw - 24px));
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: #3a2a10;
+  color: #ffe2a8;
+  border: 1px solid #7a5a1c;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font:
+    12px/1.45 system-ui,
+    sans-serif;
+}
+.fc-warn button {
+  flex: none;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.fc-crash {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  background: #0f0f10;
+  color: #f4f4f5;
+  font-family: system-ui, sans-serif;
+  text-align: center;
+}
+.fc-crash h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.fc-crash p {
+  margin: 0;
+  color: #a6a6ab;
+  font-size: 14px;
+}
+.fc-crash-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 8px;
+}
+.fc-crash button {
+  background: #2a2a2d;
+  color: #f4f4f5;
+  border: 1px solid #3a3a3e;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+.fc-crash details {
+  max-width: 560px;
+  margin-top: 10px;
+  color: #6e6e73;
+  font-size: 12px;
+}
+.fc-crash pre {
+  white-space: pre-wrap;
+  text-align: left;
+}

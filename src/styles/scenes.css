@@ -1,0 +1,297 @@
+.hm-live .sc-extra {
+  opacity: 0;
+}
+.hm-live .sc-sway,
+.hm-live .sc-wave1,
+.hm-live .sc-wave2 {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hm-live .sc-extra {
+    opacity: 1;
+  }
+
+  /* shared */
+  .hm-live .sc-breathe {
+    animation: sc-breathe 6s ease-in-out infinite alternate;
+  }
+  .hm-live .sc-shim {
+    animation: sc-shim 4.5s ease-in-out infinite alternate;
+  }
+  .hm-live .sc-twinkle {
+    animation: sc-twinkle 3s ease-in-out infinite;
+  }
+  .hm-live .sc-star {
+    animation: sc-star 3s ease-in-out infinite;
+  }
+  .hm-live .sc-pulse {
+    animation: sc-pulse 3.6s ease-in-out infinite alternate;
+  }
+  @keyframes sc-breathe {
+    from {
+      opacity: 0.68;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes sc-shim {
+    from {
+      transform: translateX(-7px);
+      opacity: 0.3;
+    }
+    to {
+      transform: translateX(7px);
+      opacity: 1;
+    }
+  }
+  @keyframes sc-twinkle {
+    0%,
+    100% {
+      opacity: 0.85;
+    }
+    50% {
+      opacity: 0.12;
+    }
+  }
+  @keyframes sc-star {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.15;
+    }
+  }
+  @keyframes sc-pulse {
+    from {
+      opacity: 0.35;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* dusk */
+  .hm-live .sc-glide {
+    animation: sc-glide 40s linear infinite;
+  }
+  .hm-live .sc-bob {
+    animation: sc-bob 1.6s ease-in-out infinite alternate;
+  }
+  @keyframes sc-glide {
+    from {
+      transform: translateX(-30px);
+    }
+    to {
+      transform: translateX(430px);
+    }
+  }
+  @keyframes sc-bob {
+    from {
+      transform: translateY(-2.5px);
+    }
+    to {
+      transform: translateY(2.5px);
+    }
+  }
+
+  /* neon */
+  .hm-live .sc-flicker {
+    animation: sc-flicker 5.5s steps(1, end) infinite;
+  }
+  .hm-live .sc-rain {
+    animation: sc-rain 1.4s linear infinite;
+  }
+  @keyframes sc-flicker {
+    0%,
+    17%,
+    23%,
+    58%,
+    100% {
+      opacity: 1;
+    }
+    19% {
+      opacity: 0.3;
+    }
+    21% {
+      opacity: 0.85;
+    }
+    60% {
+      opacity: 0.45;
+    }
+    63% {
+      opacity: 1;
+    }
+  }
+  @keyframes sc-rain {
+    from {
+      transform: translate(0, -20px);
+      opacity: 0;
+    }
+    10% {
+      opacity: 1;
+    }
+    90% {
+      opacity: 1;
+    }
+    to {
+      transform: translate(-14px, 310px);
+      opacity: 0;
+    }
+  }
+
+  /* dunes */
+  .hm-live .sc-rise {
+    animation: sc-rise 16s ease-in-out infinite alternate;
+  }
+  .hm-live .sc-sand {
+    animation: sc-sand 7s linear infinite;
+  }
+  @keyframes sc-rise {
+    from {
+      transform: translateY(12px);
+    }
+    to {
+      transform: translateY(-6px);
+    }
+  }
+  @keyframes sc-sand {
+    from {
+      transform: translate(0, 0);
+      opacity: 0;
+    }
+    15% {
+      opacity: 0.85;
+    }
+    85% {
+      opacity: 0.85;
+    }
+    to {
+      transform: translate(170px, -14px);
+      opacity: 0;
+    }
+  }
+
+  /* aurora */
+  .hm-live .sc-wave1 {
+    animation: sc-wave 8s ease-in-out infinite alternate;
+  }
+  .hm-live .sc-wave2 {
+    animation: sc-wave 11s ease-in-out infinite alternate-reverse;
+  }
+  .hm-live .sc-shoot {
+    animation: sc-shoot 9s linear infinite;
+  }
+  @keyframes sc-wave {
+    from {
+      transform: skewX(-3deg) scaleY(0.9);
+      opacity: 0.65;
+    }
+    to {
+      transform: skewX(3deg) scaleY(1.14);
+      opacity: 1;
+    }
+  }
+  @keyframes sc-shoot {
+    0% {
+      transform: translate(0, 0);
+      opacity: 0;
+    }
+    2% {
+      opacity: 1;
+    }
+    9% {
+      transform: translate(-120px, 42px);
+      opacity: 0;
+    }
+    100% {
+      transform: translate(-120px, 42px);
+      opacity: 0;
+    }
+  }
+
+  /* ocean */
+  .hm-live .sc-cloud {
+    animation: sc-cloud 20s ease-in-out infinite alternate;
+  }
+  .hm-live .sc-sink {
+    animation: sc-sink 20s ease-in-out infinite alternate;
+  }
+  @keyframes sc-cloud {
+    from {
+      transform: translateX(-28px);
+    }
+    to {
+      transform: translateX(28px);
+    }
+  }
+  @keyframes sc-sink {
+    from {
+      transform: translateY(-3px);
+    }
+    to {
+      transform: translateY(9px);
+    }
+  }
+
+  /* pines */
+  .hm-live .sc-sway {
+    animation: sc-sway 6s ease-in-out infinite alternate;
+  }
+  .hm-live .sc-mist {
+    animation: sc-mist 18s ease-in-out infinite alternate;
+  }
+  .hm-live .sc-ray {
+    animation: sc-ray 7s ease-in-out infinite alternate;
+  }
+  .hm-live .sc-firefly {
+    animation: sc-firefly 8s ease-in-out infinite;
+  }
+  @keyframes sc-sway {
+    from {
+      transform: skewX(calc(var(--sw) * -1));
+    }
+    to {
+      transform: skewX(var(--sw));
+    }
+  }
+  @keyframes sc-mist {
+    from {
+      transform: translateX(-45px);
+    }
+    to {
+      transform: translateX(45px);
+    }
+  }
+  @keyframes sc-ray {
+    from {
+      opacity: 0.25;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes sc-firefly {
+    0% {
+      transform: translate(0, 0);
+      opacity: 0;
+    }
+    20% {
+      opacity: 1;
+    }
+    50% {
+      transform: translate(10px, -14px);
+      opacity: 0.3;
+    }
+    80% {
+      transform: translate(-6px, -24px);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(4px, -34px);
+      opacity: 0;
+    }
+  }
+}

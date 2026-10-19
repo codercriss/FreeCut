@@ -1,0 +1,174 @@
+/* every screen lives in a full-viewport layer; the editor layer always sits above home */
+.fc-layer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  background: #0f0f10;
+}
+.fc-home {
+  z-index: 1;
+}
+.fc-editor {
+  z-index: 2;
+}
+.fc-layer.fc-in,
+.fc-layer.fc-out {
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation-duration: 0.46s;
+  animation-timing-function: cubic-bezier(0.22, 0.8, 0.2, 1);
+  animation-fill-mode: both;
+}
+
+/* desktop: the editor fades up out of home (home stays solid underneath, so the screen never dips dark) */
+.fc-editor.fc-in {
+  animation-name: fc-zoom-in;
+}
+.fc-editor.fc-out {
+  animation-name: fc-zoom-out;
+  animation-duration: 0.3s;
+  animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+}
+.fc-home.fc-out {
+  animation-name: fc-sink;
+}
+.fc-home.fc-in {
+  animation-name: fc-rise;
+}
+@keyframes fc-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.965);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes fc-zoom-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.965);
+  }
+}
+@keyframes fc-sink {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.05);
+  }
+}
+@keyframes fc-rise {
+  from {
+    transform: scale(1.05);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* phone: push / pop — the editor slides over home, home eases left and dims */
+.fc-m.fc-editor.fc-in,
+.fc-m.fc-editor.fc-out {
+  box-shadow: -24px 0 48px rgba(0, 0, 0, 0.5);
+}
+.fc-m.fc-editor.fc-in {
+  animation-name: fc-push-in;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+.fc-m.fc-editor.fc-out {
+  animation-name: fc-push-out;
+  animation-duration: 0.42s;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+.fc-m.fc-home.fc-out {
+  animation-name: fc-under-out;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+.fc-m.fc-home.fc-in {
+  animation-name: fc-under-in;
+  animation-duration: 0.42s;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+@keyframes fc-push-in {
+  from {
+    transform: translate3d(100%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes fc-push-out {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(100%, 0, 0);
+  }
+}
+@keyframes fc-under-out {
+  from {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(-22%, 0, 0);
+    opacity: 0.55;
+  }
+}
+@keyframes fc-under-in {
+  from {
+    transform: translate3d(-22%, 0, 0);
+    opacity: 0.55;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+/* reduced motion: a quick fade, no movement */
+@keyframes fc-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes fc-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fc-layer.fc-in,
+  .fc-layer.fc-out {
+    animation-duration: 0.18s !important;
+    animation-timing-function: linear !important;
+    box-shadow: none !important;
+  }
+  .fc-editor.fc-in {
+    animation-name: fc-fade-in !important;
+  }
+  .fc-editor.fc-out {
+    animation-name: fc-fade-out !important;
+  }
+  .fc-home.fc-in,
+  .fc-home.fc-out {
+    animation-name: none !important;
+  }
+}
