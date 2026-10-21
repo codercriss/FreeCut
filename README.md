@@ -1,6 +1,6 @@
 # FreeCut
 
-Browser-based video editor (PWA) — React + TypeScript + Vite. Goal: a free, offline-capable alternative to CapCut. **v1.1.0 — Phase 0 (foundations) complete**; real media arrives in Phase 1 (see `Roadmap.md`).
+Browser-based video editor (PWA) — React + TypeScript + Vite. Goal: a free, offline-capable alternative to CapCut. **v1.2.0 — Phase 1a: import your own videos, photos and audio** (real thumbnails, library, add to timeline; playback arrives in Phase 1b). See `Roadmap.md`.
 
 ## Project docs
 - [`Roadmap.md`](Roadmap.md) — phased plan to a full CapCut-class editor, gap analysis, open decisions.
@@ -41,7 +41,7 @@ vercel --prod # production deploy
 - Icons live in `public/` (`pwa-192x192.png`, `pwa-512x512.png`, `pwa-maskable-512x512.png`, `apple-touch-icon.png`).
 
 ## Notes
-- **Where things are:** `src/app` (shell, boot, routing), `src/model` (project model), `src/store` (state, undo/redo), `src/storage` (IndexedDB autosave, OPFS skeleton), `src/editor` (panels, timelines), `src/home` (startup screen + hero art), `src/ui` (shared controls), `src/styles` (CSS). Map and explanations: `Handover.md §3`, `how_it_works.md §1`.
+- **Where things are:** `src/app` (shell, boot, routing), `src/model` (project model), `src/store` (state, undo/redo), `src/storage` (IndexedDB autosave), `src/media` (import pipeline, media store), `src/editor` (panels, timelines), `src/home` (startup screen + hero art), `src/ui` (shared controls), `src/styles` (CSS). Map and explanations: `Handover.md §3`, `how_it_works.md §1`.
 - **Product name:** `src/app/brand.ts` (`BRAND_NAME`, `BRAND_ACCENT`); also `<title>` / meta tags in `index.html` and `name` / `short_name` in `vite.config.ts`.
 - **Project data & saving:** the project is stored in the browser's IndexedDB (database `freecut`), autosaved ~0.5 s after each edit. Home → *Reset demo project* (two taps) restores the sample. Details: `how_it_works.md §4–5`.
 - **Home content:** placeholders `TOOLS` and `TEMPLATES` at the top of `src/home/Home.tsx` (they open the editor until Phase 9). The hero scene + headline rotate on every app open and never repeat the last pick (`src/home/heroPick.ts`, remembered in `localStorage`); add headlines to `HEADLINES` there, add scenes in `src/home/HeroScenes.tsx` (register in `SCENE_ART`, append to `SCENES`, animate in `src/styles/scenes.css`). Recipe: `Knowledge_Contribution.md A7`.

@@ -23,6 +23,9 @@ const launchOptions = executablePath
 export default defineConfig({
   testDir: "e2e",
   fullyParallel: true,
+  // Decoding video in software (CI containers, sandboxes) is slow: be generous so tests fail on bugs, not on speed.
+  timeout: 60_000,
+  expect: { timeout: 20_000 },
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: [["list"], ["html", { open: "never" }]],

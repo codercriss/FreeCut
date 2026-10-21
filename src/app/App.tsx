@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { PlaybackProvider, EDITOR_START_SECONDS } from "../engine/playback";
+import { PlaybackProvider } from "../engine/playback";
 import Home from "../home/Home";
 import { defaultSelection, projectDuration } from "../model/selectors";
 import "../styles/app.css";
@@ -21,11 +21,7 @@ function EditorHost({ layout }: { layout: LayoutMode }) {
   const fps = useProject((p) => p.settings.fps);
   const total = useProject(projectDuration);
   return (
-    <PlaybackProvider
-      fps={fps}
-      totalFrames={total}
-      startFrame={Math.round(EDITOR_START_SECONDS * fps)}
-    >
+    <PlaybackProvider fps={fps} totalFrames={total} autoPlay={false}>
       <Editor layout={layout} />
     </PlaybackProvider>
   );

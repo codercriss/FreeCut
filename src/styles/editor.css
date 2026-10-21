@@ -1905,3 +1905,319 @@
   border-radius: 3px;
   pointer-events: none;
 }
+
+/* ───────── Phase 1a: real media in the library ───────── */
+.ve-art,
+.ve-stage-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.ve-stage-img {
+  object-fit: contain;
+  background: #000;
+}
+.ve-video {
+  position: relative;
+}
+.ve-stage-img {
+  position: absolute;
+  inset: 0;
+}
+.ve-ph {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8fb9c0;
+  background: linear-gradient(160deg, #1b2a30, #0f1618);
+}
+.ve-ph.audio {
+  background: linear-gradient(160deg, #1d2a46, #101727);
+  color: #8fa8d8;
+}
+.ve-ph-wave {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  height: 56%;
+  width: 78%;
+}
+.ve-ph-wave i {
+  flex: 1;
+  min-width: 1px;
+  background: currentColor;
+  border-radius: 1px;
+}
+.ve-frame.poster {
+  background-color: #0e5560;
+  background-size: cover;
+  background-position: center;
+}
+.ve-more {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  width: 15px;
+  height: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.ve-item:hover .ve-more,
+.ve-more:focus-visible,
+.ve-add:focus-visible {
+  opacity: 1;
+}
+.ve-mob-pane .ve-more {
+  opacity: 1;
+  width: 22px;
+  height: 22px;
+}
+.ve-lacts {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+  padding-right: 4px;
+}
+.ve-lacts .ve-add,
+.ve-lacts .ve-more {
+  position: static;
+  opacity: 1;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+.ve-media-content.dropping {
+  outline: 1px dashed var(--accent);
+  outline-offset: -3px;
+}
+.ve-all {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+}
+.ve-all select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  padding: 2px 4px 2px 2px;
+  cursor: pointer;
+}
+.ve-all select option {
+  color: #000;
+}
+.ve-all select:focus-visible {
+  outline: 1px solid var(--accent);
+  border-radius: 3px;
+}
+
+.ve-tip {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0 0 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #1f2b2e;
+  color: #b9d6da;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.ve-tip button {
+  flex: none;
+  color: var(--accent);
+  text-decoration: underline;
+}
+.ve-mob-pane .ve-tip {
+  font-size: 12px;
+}
+
+/* import progress / result */
+.ve-toast {
+  /* rendered outside .ve-app, so it needs its own copy of the tokens */
+  --text: #f4f4f5;
+  --accent: #12c6d8;
+  font-family:
+    Inter,
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  position: fixed;
+  z-index: 40;
+  left: 50%;
+  bottom: calc(var(--safe-bottom, 0px) + 74px);
+  transform: translateX(-50%);
+  width: min(420px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #26262a;
+  border: 1px solid #3a3a3e;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.ve-app:not(.ve-mobile) ~ .ve-toast,
+.ve-scroll:not(.ve-scroll-m) > .ve-toast {
+  bottom: 16px;
+  left: auto;
+  right: 16px;
+  transform: none;
+}
+.ve-toast-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+.ve-toast-row button {
+  background: none;
+  border: 0;
+  padding: 4px 2px;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.ve-toast-err {
+  color: #ffb3b3;
+  font-size: 11px;
+}
+.ve-spinner {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #4a4a4f;
+  border-top-color: var(--accent);
+  animation: ve-spin 0.8s linear infinite;
+}
+@keyframes ve-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ve-spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/* dialog (bottom sheet on phones) */
+.ve-dialog-back {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+.ve-dialog {
+  width: min(360px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #1f1f22;
+  border: 1px solid #36363a;
+  color: var(--text);
+  font-size: 13px;
+}
+.ve-dialog-title {
+  font-weight: 600;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.ve-dialog-meta,
+.ve-dialog-text {
+  margin: 0;
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.ve-dialog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ve-dialog button {
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #2a2a2d;
+  color: var(--text);
+  text-align: left;
+  font-size: 13px;
+}
+.ve-dialog button:hover {
+  background: #343438;
+}
+.ve-dialog button.danger {
+  color: #ff8b8b;
+}
+.ve-dialog button.primary {
+  background: var(--accent);
+  color: #06272c;
+  font-weight: 600;
+}
+.ve-dialog button:disabled {
+  opacity: 0.45;
+}
+.ve-dialog-row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.ve-dialog-row button {
+  text-align: center;
+}
+.ve-dialog-input {
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #3a3a3e;
+  background: #131315;
+  color: var(--text);
+  font-size: 16px; /* 16px stops iOS Safari zooming the page when the field is focused */
+}
+@media (max-width: 819px) {
+  .ve-dialog-back {
+    align-items: flex-end;
+  }
+  .ve-dialog {
+    width: 100%;
+    border-radius: 14px 14px 0 0;
+    padding-bottom: calc(16px + var(--safe-bottom, 0px));
+  }
+}
+
+/* touch devices have no hover: always show the tile actions */
+@media (hover: none) {
+  .ve-add,
+  .ve-more {
+    opacity: 1;
+  }
+}

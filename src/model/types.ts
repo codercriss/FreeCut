@@ -12,7 +12,7 @@
 export type Frame = number;
 export type Id = string;
 
-export const SCHEMA_VERSION = 1 as const;
+export const SCHEMA_VERSION = 2 as const;
 
 export interface ProjectSettings {
   fps: number;
@@ -28,8 +28,10 @@ export type AssetKind = "video" | "audio" | "image";
 export type AssetSource =
   /** Built-in generated SVG artwork used by the demo project. */
   | { type: "generated"; scene: string; thumb: string }
-  /** Phase 1: an imported file stored in the Origin Private File System. */
-  | { type: "opfs"; path: string };
+  /** Reserved: an imported file in the Origin Private File System (later optimisation; see R-002). */
+  | { type: "opfs"; path: string }
+  /** An imported file kept in the app's media store (IndexedDB blobs). `mediaId` is the key; the poster is `${mediaId}:poster`. */
+  | { type: "stored"; mediaId: string };
 
 export interface Asset {
   id: Id;
@@ -39,6 +41,12 @@ export interface Asset {
   width?: number;
   height?: number;
   source: AssetSource;
+  /** MIME type of the stored file (imported assets). */
+  mime?: string;
+  /** Size of the stored file in bytes (imported assets). */
+  bytes?: number;
+  /** Waveform summary, 0–100 per bucket (imported audio). */
+  peaks?: number[];
 }
 
 /**

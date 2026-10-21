@@ -3,24 +3,34 @@ import { useRef, useState, type PointerEvent } from "react";
 import { usePlayback } from "../engine/playback";
 import { activeVisualClip, assetById } from "../model/selectors";
 import { timecode } from "../model/time";
+import type { Asset } from "../model/types";
+import { usePosterUrl } from "../media/useMediaUrl";
 import { useProject } from "../store/ProjectContext";
 import { IconFit } from "../ui/icons";
 import { Scene } from "./footage/scenes";
 
-/** The scene (generated footage) under the playhead, or null for a gap / empty project. */
-export function useStageScene(frame: number): string | null {
+/** The asset showing under the playhead (topmost visual clip), or undefined for a gap / empty project. */
+export function useStageAsset(frame: number): Asset | undefined {
   return useProject((p) => {
-    const total = Math.max(0, frame);
-    const clip = activeVisualClip(p, total);
-    const asset = clip ? assetById(p, clip.assetId) : undefined;
-    return asset && asset.source.type === "generated" ? asset.source.scene : null;
+    const clip = activeVisualClip(p, Math.max(0, frame));
+    return clip ? assetById(p, clip.assetId) : undefined;
   });
 }
 
-/** The picture area shared by the desktop and phone players. */
+/**
+ * The picture area shared by the desktop and phone players. Demo assets draw their generated scene; imported
+ * assets show their poster until the real decoder-backed preview arrives (Phase 1b).
+ */
 export function Stage({ frame }: { frame: number }) {
-  const scene = useStageScene(frame);
-  return <div className="ve-video">{scene && <Scene id={scene} />}</div>;
+  const asset = useStageAsset(frame);
+  const poster = usePosterUrl(asset);
+  const scene = asset && asset.source.type === "generated" ? asset.source.scene : null;
+  return (
+    <div className="ve-video">
+      {scene && <Scene id={scene} />}
+      {poster && <img className="ve-stage-img" src={poster} alt="" draggable={false} />}
+    </div>
+  );
 }
 
 /* ───────────── player ───────────── */

@@ -43,8 +43,16 @@ export function validateProject(raw: unknown): string[] {
     if (!["video", "audio", "image"].includes(String(a.kind))) errs.push(`asset ${a.id}: bad kind`);
     if (!isInt(a.durationFrames) || a.durationFrames < 0)
       errs.push(`asset ${a.id}: durationFrames must be a non-negative integer`);
-    if (!isObj(a.source) || !["generated", "opfs"].includes(String(a.source.type)))
+    if (!isObj(a.source) || !["generated", "opfs", "stored"].includes(String(a.source.type)))
       errs.push(`asset ${a.id}: bad source`);
+    else if (a.source.type === "stored" && !isStr(a.source.mediaId))
+      errs.push(`asset ${a.id}: stored source needs a mediaId`);
+    if (a.mime !== undefined && typeof a.mime !== "string")
+      errs.push(`asset ${a.id}: mime must be a string`);
+    if (a.bytes !== undefined && (!isInt(a.bytes) || a.bytes < 0))
+      errs.push(`asset ${a.id}: bytes must be a non-negative integer`);
+    if (a.peaks !== undefined && (!Array.isArray(a.peaks) || !a.peaks.every((n) => isNum(n))))
+      errs.push(`asset ${a.id}: peaks must be an array of numbers`);
   });
 
   const trackIds = new Set<string>();

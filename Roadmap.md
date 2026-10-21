@@ -6,12 +6,18 @@
 
 ---
 
-## 0. Where we are today (honest status — end of Phase 0)
+## 0. Where we are today (honest status — end of Phase 1a, v1.2.0)
 
-FreeCut v1.1.0 still **looks like the prototype** but now has a real skeleton. What is real vs mock:
+FreeCut still looks like the prototype, but **you can now bring your own media**. What is real vs mock:
 
 | Area | Today |
 |---|---|
+| **Real** | **Import videos, photos and audio from your device** (file picker; drag-and-drop on desktop) with real thumbnails, durations and waveforms · library with filter, rename, delete (undoable) · **add to timeline** · imported media **survives closing the app** (stored in the browser) · clear messages for files that can't be read · iPhone Home-Screen tip · plus everything from Phase 0: project model v2 with migrations, **undo/redo**, **autosave**, corrupt-project quarantine, Home ⇄ Editor navigation incl. Back/Forward, consistent desktop/phone timelines, keyboard sliders, offline PWA, error boundary. **Verified by hand on iPhone Safari (Phase 0 review).** |
+| **Shown but not played yet** | Imported clips appear on the timeline and the player shows their **poster image** — real video/audio **playback arrives in Phase 1b**. Properties values are stored on the clip but not applied to pixels (Phase 3). |
+| **Still mock** | Audio playback and level meter, the demo footage (generated art), effects, text, stickers, transitions, export, split/delete/record, keyframes, masks |
+| **Engineering** | TypeScript strict · **246 unit/component tests** · 21 Playwright specs × 4 projects (Chromium run incl. real video/audio/photo files; **WebKit configured, run by CI**) · ESLint · Prettier · CI · lockfile |
+
+---|---|
 | **Real** | Project model (versioned, integer-frame time) · command bus with **undo/redo** (buttons + Ctrl/Cmd+Z; slider drags = one step) · **autosave to IndexedDB** and reopen on reload · corrupt/newer-project quarantine · schema-migration runner · truthful save indicator · Home ⇄ Editor navigation incl. browser Back **and Forward** · desktop timeline whose ruler, clips and playhead agree · phone timeline scroll-sync · keyboard-operable sliders · lazy-loaded editor · offline PWA · error boundary |
 | **Model-driven but not yet applied to pixels** | Properties values (filter strength, zoom, opacity, section on/off, effects list), track mute (there is no audio to silence yet) |
 | **Still mock** | All media (one generated SVG scene; 5 demo "assets"), audio, import, waveform, level meter, effects, text, stickers, transitions, export, split/delete/record, keyframes, masks |
@@ -111,7 +117,7 @@ Sizes: **S** ≈ one focused pass · **M** · **L** (likely split) · **XL** (wi
 | Phase | Name | Size | Depends on | Headline outcome |
 |---|---|---|---|---|
 | **0** | Foundations | M | — | ✔ **Delivered (v1.1.0)** — same look, real architecture: model, store, undo/redo, autosave, tests, TypeScript |
-| **1** | Real media pipeline | XL | 0 | Import real video/audio/images; real preview + audio; projects that save & reopen |
+| **1** | Real media pipeline | XL | 0 | **1a ✔ delivered (v1.2.0)** import + library + thumbnails + persistence · **1b** real preview & audio playback · **1c** multiple projects, proxies, storage manager |
 | **2** | Timeline editing core | XL | 1 | Multi-track editing: move, trim, split, ripple, snap, copy/paste, shortcuts |
 | **E1** | **Thin end-to-end export** *(pulled forward — your decision)* | M | 1, 2 | Import → trim/arrange → **export a playable MP4**, cuts only |
 | **3** | Properties & animation | L | 2 | Transform, crop, blend, speed (incl. curves), keyframes + easing, canvas, mask, chroma key |
@@ -144,21 +150,25 @@ Each phase lists **scope**, **new capabilities beyond what the UI currently sugg
 **Acceptance (met):** looks and behaves like v1.0.0 except the itemised, intentional deltas (`Handover.md §11`); `build`, `test`, `lint`, `e2e` (Chromium) pass; undo/redo works end-to-end for real commands with tests; reload preserves edits (proved in a real browser).
 
 ### Phase 1 — Real media pipeline
-*Make footage real.* (Delivered as 1a import/library, 1b preview/audio, 1c projects.)
+*Make footage real.* Delivered in three parts: **1a import & library ✔**, **1b preview & audio**, **1c projects & heavy files**.
 
-**Scope**
-- **Import:** file picker, drag-and-drop (desktop), paste, "Import media" from Home; video, audio, images (incl. HEIC where decodable), GIF/animated formats as images or video. Multi-select, folder import where supported.
-- **Probe & ingest:** duration, fps (incl. variable fps), resolution, rotation metadata, codecs, audio channels; reject/explain unsupported files with actionable messages.
-- **Media library (real):** grid/list, sort, search, filter by type, rename, delete, relink missing files, usage indicator ("used in project"), **Library** source for bundled royalty-free sample assets.
-- **Thumbnails & waveforms** generated in Workers and cached.
-- **Preview:** *opens paused* (K2), audio-driven master clock (K3), real thumbnails (K4); frame-accurate seek, scrub, play at project fps; decode via WebCodecs with `HTMLVideoElement` fallback; canvas compositor (WebGL2) showing the clip stack at time *t*; "Original" toggle (real: bypass effects), fit/fill, fullscreen, safe-area guides.
-- **Audio playback** via Web Audio with the audio clock as master; live level meters from a real `AnalyserNode` (today's meter is a sine fake).
-- **Add to timeline** (button, drag, double-click, "+" on phone).
-- **Projects:** create/open/rename/duplicate/delete (multiple projects; *autosave itself shipped in Phase 0*), storage quota display, **research R-002 first** (OPFS write support on Safari — see `Handover.md N2`).
+#### 1a — Import & library ✔ DELIVERED (v1.2.0)
+**Done:** file picker + desktop drag-and-drop · classification by MIME/extension (incl. iPhone `.MOV`/`.HEIC`) · probing with the browser's decoders (duration, size; audio-only "video" detected) · posters for photos/videos · waveform summary for audio · media stored as IndexedDB Blobs with a quota-aware, cleanup-on-failure ingest · one-undo-step batches · library with real thumbnails, durations, type filter, rename, delete-with-its-clips (undoable) · **+** add to timeline (photos default to 5 s) · import progress/result toast with per-file reasons · iPhone "add to Home Screen" tip · orphan sweep · **schema v2 + a real v1→v2 migration** · research **R-002** (IndexedDB chosen over OPFS) · **editor opens paused** (K2) which also made imports ~2× faster in tests.
 
-**Beyond current UI:** media proxies for heavy 4K files, background import queue with progress, duplicate detection, storage manager.
+**Not done in 1a** (deliberately): real playback of video/audio (1b); per-frame filmstrip thumbnails (1b); search/sort and duplicate detection (1c); relink missing files (1c); proxies for heavy files and a storage-usage screen (1c); Home "Import media" opens the sheet but can't open the file picker itself (needs a tap — platform rule); folder import; paste import; HEIC fallback conversion where the browser can't decode it; waveform for video files.
 
-**Acceptance:** import a 1080p MP4, a 4K MOV (or a clear "not supported here" message), an MP3 and a PNG; see correct thumbnails/waveform; play with sound in sync (≤ 1 frame drift over 60 s); scrub smoothly; close the tab, reopen, project and media are still there — **verified on Safari and Chrome, desktop and phone** (D-007).
+**Acceptance (met in Chromium; iPhone verification = your 1a review):** import a video, a photo and an audio file → correct tiles, durations, waveform; bad/unsupported files explained without blocking the rest; add to timeline; close and reopen → everything is still there; upgrading a real Phase 0 database loses nothing.
+
+#### 1b — Preview & audio *(next)*
+- **Preview:** audio-driven master clock (K3), real frame display (WebCodecs with `HTMLVideoElement` fallback) composited on a WebGL2 canvas, frame-accurate seek/scrub, per-frame thumbnails (K4), "Original" toggle, fit/fill, fullscreen.
+- **Audio playback** via Web Audio with the audio clock as master; live level meter from a real `AnalyserNode`; honour track mute.
+- **Research R-001/R-004/R-005 first**, on iPhone Safari specifically (WebCodecs availability, texture upload cost, `AudioContext` start rules).
+- **Acceptance:** play an imported video with sound in sync (≤ 1 frame drift over 60 s), scrub smoothly, on **iPhone Safari and Chrome**.
+
+#### 1c — Projects & heavy files
+- Create / open / rename / duplicate / delete projects (multiple), project list on Home from real data; storage usage screen; duplicate detection; library search/sort; relink missing media.
+- **Proxies** for 4K/long files; revisit OPFS (with a Worker write path) if big files need it.
+- **Acceptance:** several projects, a 1–2 min 4K phone video edits smoothly via its proxy, and storage use is visible.
 
 ### Phase 2 — Timeline editing core
 **Scope**
@@ -315,9 +325,9 @@ Some features — auto captions (speech → text), removing a background, auto-e
 
 | Capability | Now | Phase |
 |---|---|---|
-| Import local media | ◐ | 1 |
-| Media library (search/sort/rename) | ◐ | 1 |
-| Frame-accurate preview + audio | ◐ (clock only) | 1 |
+| Import local media | ✔ (1a; picker + drop; no folder/paste import) | 1a ✔ |
+| Media library (filter ✔ · rename ✔ · delete ✔ · search/sort ☐) | ◐ | 1a ✔ / 1c |
+| Frame-accurate preview + audio | ◐ (posters only; clock only) | **1b** |
 | Autosave / reopen the last project | ✔ (Phase 0) — multi-project list in Phase 1/9 | 1 / 9 |
 | Multi-track timeline | ◐ (1 video + 1 audio, static) | 2 |
 | Trim / split / delete / ripple | ◐ | 2 |
@@ -370,8 +380,10 @@ Updated at the end of each phase delivery.
 | Phase | Status | Delivered | Notes |
 |---|---|---|---|
 | Baseline v1.0.0 | ✔ received & analysed | 2026-10-16 | Docs added (`freecut-baseline-docs.zip`). No code changed. |
-| **0** | ✔ **delivered — awaiting your review** | 2026-10-16 | `freecut-phase-0.zip`, v1.1.0. Review script: `Handover.md §10` |
-| 1 | ☐ next | — | |
+| **0** | ✔ **delivered & reviewed on iPhone Safari — all steps passed** | 2026-10-16 | `freecut-phase-0.zip`, v1.1.0 |
+| **1a** | ✔ **delivered — awaiting your review** | 2026-10-20 | `freecut-phase-1a.zip` (+ `freecut-phase-1a-changes.zip`), v1.2.0. Phone review script: `Handover.md §10` |
+| 1b | ☐ next | — | preview & audio |
+| 1c | ☐ | — | projects & heavy files |
 | 2 | ☐ | — | |
 | E1 | ☐ | — | thin export (after 2) |
 | 3 | ☐ | — | |

@@ -1,6 +1,6 @@
 # How FreeCut works
 
-> **Scope:** the mechanics of the app **as built at v1.1.0 (end of Phase 0)**. Verified by reading the source, by 156 unit/component tests, and by 22 passing real-browser (Chromium) end-to-end runs.
+> **Scope:** the mechanics of the app **as built at v1.2.0 (end of Phase 1a — real media import & library)**. Verified by reading the source, by 246 unit/component tests, by Chromium end-to-end runs with real video/audio/photo files, and (for the Phase 0 base) by hand on iPhone Safari.
 > This file is **rewritten as the architecture changes** — every phase updates the relevant sections, so it always describes what is actually in the zip, not what we hope for.
 > Companions: `Handover.md` (status, issues, review script), `Roadmap.md` (plan), `Knowledge_Contribution.md` (how to contribute, learnings).
 
@@ -28,16 +28,17 @@ index.html ─► src/main.tsx ─► <ErrorBoundary><App/></ErrorBoundary>
 - **Stack:** React 18 + TypeScript (strict), Vite 6, `lucide-react`, `vite-plugin-pwa` (Workbox). No router, no state library, no CSS framework.
 - **The project is data.** Everything visible in the editor (library, clips, track mute state, property values, title, durations) is read from one JSON-serialisable project; edits go through **commands**; undo/redo and persistence hang off the same store.
 - **One component tree, two layouts.** Panels are shared; the shell around them differs for desktop vs phone.
-- **Local-first, no backend.** No network calls at runtime. Storage is IndexedDB (project) and, from Phase 1, OPFS (media files).
+- **Local-first, no backend.** No network calls at runtime. Storage is IndexedDB: the project **and** imported media files (as Blobs). OPFS stays an unused skeleton (see §5).
 
-### Source map (v1.1.0)
+### Source map (v1.2.0)
 
 | Folder | What lives there |
 |---|---|
 | `src/app/` | Root `App`, boot + bootstrap, screen router, error boundary, nav context, brand constants, platform flags, `useIsMobile` |
 | `src/model/` | **Project model v1**: `types`, `time`, `defaults`, `selectors`, `sample` project, `schema` validator, `migrations` runner, frozen `fixtures/` |
 | `src/store/` | `createStore` + `useStore`, **`projectStore`** (history), `commands`, `editorStore` (selection), `prefsStore`, React context hooks |
-| `src/storage/` | `idb` wrapper, `projectRepo`, `autosave`, `opfs` skeleton |
+| `src/storage/` | `idb` wrapper (DB v2), `projectRepo`, `autosave`, `opfs` skeleton |
+| `src/media/` | **Phase 1a import pipeline:** `classify`, `probe`, `thumbnail` (posters + waveform), `ingest`, `importer`, `importStore`, `mediaStore` (+ orphan sweep), `useMediaUrl` |
 | `src/engine/` | Playback clock (`clock`, `playback`) — becomes the real engine from Phase 1 |
 | `src/editor/` | Editor shell + panels; `timeline/` (geometry, ruler, clips, desktop + phone timelines); `footage/` (generated SVG scenes) |
 | `src/home/` | Home screen, hero scenes, hero-pick logic |
@@ -56,7 +57,7 @@ index.html ─► src/main.tsx ─► <ErrorBoundary><App/></ErrorBoundary>
    Global CSS: box-sizing reset, hidden scrollbars, no overscroll bounce, and a **split background** (`#0f0f10` / `#1a1a1c`) so any strip iOS doesn't paint blends with the nearest bar.
 2. **`main.tsx`** → `StrictMode` → root `ErrorBoundary` → `App`. (StrictMode double-runs effects in dev; `boot()` is memoised so it only runs once.)
 3. **`App`** renders `<div class="fc-boot">` (plain dark) until `boot()` resolves — typically a few ms.
-4. **`boot()`** (`app/boot.ts`) = `bootstrapProject()` → `startAutosave()` → set default selection.
+4. **`boot()`** (`app/boot.ts`) = `bootstrapProject()` → `startAutosave()` → set default selection → **sweep orphaned media** (best effort, in the background).
 5. **Idle warm-up:** once Home is showing, `requestIdleCallback` (or a 1.2 s timeout) fetches the editor chunk so opening the editor is instant.
 6. **PWA:** `vite-plugin-pwa` (production build only) emits `sw.js`/`manifest`; the service worker precaches everything *including the lazy editor chunk and CSS* (`globPatterns`), with `navigateFallback: index.html` and `registerType: "autoUpdate"`.
 
@@ -78,10 +79,11 @@ getLastProjectId() ─► loadRawProject(id)
 ## 3. The project model (`src/model`)
 
 ```ts
-Project { schemaVersion: 1, id, name, createdAt, updatedAt,
+Project { schemaVersion: 2, id, name, createdAt, updatedAt,
           settings{ fps, width, height, ratio },
           assets[], tracks[], clips[], markers[] }
-Asset   { id, kind: video|audio|image, name, durationFrames, source: generated{scene,thumb} | opfs{path} }
+Asset   { id, kind: video|audio|image, name, durationFrames, width?, height?, mime?, bytes?, peaks?,
+          source: generated{scene,thumb} | stored{mediaId} | opfs{path} (reserved) }
 Track   { id, kind: main|overlay|audio, name, muted, locked, hidden }       // array order = top→bottom
 Clip    { id, trackId, assetId, start, duration, sourceIn, speed,           // all FRAMES, integers
           transform{ zoom,x,y,rotation }, opacity, blend, filter|null, effects[], sections{…} }
@@ -93,6 +95,7 @@ Clip    { id, trackId, assetId, start, duration, sourceIn, speed,           // a
 - **`sample.ts`** builds the demo project: the v1.0.0 picture as data — 1 overlay track (empty), 1 main track with `Moraine Lake.mov` (27 s 58 f), 1 audio track with `Audio.aac` (starts 314 f, 602 f long, speed 2×), plus four library assets.
 - **`schema.ts` → `validateProject`** returns human-readable problems: types, integer frames, unique ids, dangling track/asset references, **no overlapping clips on a track**, value ranges.
 - **`migrations.ts` → `migrateProject(raw)`**: reads `schemaVersion`, refuses *newer* schemas (`too-new`) instead of mangling them, applies `MIGRATIONS[v]` step by step (never mutating the input), then validates. Throws `ProjectLoadError` with a code (`not-object | no-version | too-new | missing-migration | invalid`). `fixtures/project.v1.json` is a **frozen** v1 file that must load forever.
+- **Schema v2 (Phase 1a):** assets gained the `stored` source (an imported file in the media store; the poster is `${mediaId}:poster`) and optional `mime`, `bytes`, `peaks` (a ≤120-number waveform summary kept inline in the project). The **v1 → v2 migration is a pure re-stamp** (every v1 project is already a valid v2 project) — the first real use of the migration runner, covered by the frozen v1 *and* v2 fixtures and by a real-browser test that upgrades a genuine Phase 0 database.
 - *Known debt:* `transform.zoom` is the prototype's 0–100 "Zoom" slider semantics and isn't applied to pixels; Phase 3 replaces it with a real `scale` via a v2 migration.
 
 ---
@@ -113,7 +116,7 @@ Clip    { id, trackId, assetId, start, duration, sourceIn, speed,           // a
 ### Commands
 A command is `{ type, label, coalesceKey?, apply(project) → project }`. **`apply` must be pure and return the *same object* if nothing changed** — the store then records nothing.
 
-Implemented in Phase 0 (`store/commands.ts`): `renameProject`, `setTrackMuted`, `setClipOpacity`, `setFilterStrength`, `setClipZoom` (these three coalesce), `setClipBlend`, `setClipSectionEnabled`, `removeClipEffect`, `resetClipSection`. Values are clamped and rounded inside the command, so no caller can produce an invalid project (a test validates after every command).
+Implemented (`store/commands.ts`): **Phase 1a —** `addAssets` (a whole import batch = one undo step), `renameAsset`, `removeAsset` (removes the asset *and* every clip using it, in one step), `addClipFromAsset` (appends to the end of the main track, or the audio track for audio; the clip id is passed in so the command stays pure). **Phase 0 —** `renameProject`, `setTrackMuted`, `setClipOpacity`, `setFilterStrength`, `setClipZoom` (these three coalesce), `setClipBlend`, `setClipSectionEnabled`, `removeClipEffect`, `resetClipSection`. Values are clamped and rounded inside the command, so no caller can produce an invalid project (a test validates after every command).
 
 ### History (`createProjectStore`)
 - **Snapshot-based with structural sharing:** each entry stores `before` and `after` projects; commands only create new objects along the changed path, so a snapshot is a handful of small objects (tests assert `clips`/`assets` arrays are shared between snapshots). Swap to patches later without changing the Command API.
@@ -130,7 +133,7 @@ Implemented in Phase 0 (`store/commands.ts`): `renameProject`, `setTrackMuted`, 
 
 ## 5. Persistence (`src/storage`)
 
-- **`idb.ts`:** a promise wrapper over IndexedDB. DB `freecut` v1 with stores `projects` (key `id`) and `meta` (key `key`: `lastProjectId`, `quarantine:*`). Writes resolve on **transaction completion** (durable), a failed open isn't cached (recovers when storage works again), `onversionchange`/`onclose` drop the handle. Missing/blocked/throwing IndexedDB (Firefox private mode) → `StorageUnavailableError`.
+- **`idb.ts`:** a promise wrapper over IndexedDB. DB `freecut` **v2** with stores `projects` (key `id`), `meta` (key `key`: `lastProjectId`, `quarantine:*`) and **`media`** (key `id`: imported files + posters as Blobs). The v1 → v2 upgrade only *adds* the `media` store and never touches existing data (tested against a genuine v1 database). Writes resolve on **transaction completion** (durable), a failed open isn't cached (recovers when storage works again), `onversionchange`/`onclose` drop the handle. Missing/blocked/throwing IndexedDB (Firefox private mode) → `StorageUnavailableError`.
 - **`projectRepo.ts`:** `saveProject`, `loadProject` (migrate + validate), `loadRawProject`, `listProjects`, `deleteProject`, `get/setLastProjectId`, `quarantineRaw`.
 - **`autosave.ts`:** `startAutosave({ store, save })`
   - waits **500 ms of quiet** after a change, then saves the **latest** project;
@@ -139,7 +142,29 @@ Implemented in Phase 0 (`store/commands.ts`): `renameProject`, `setTrackMuted`, 
   - `StorageUnavailableError` → status `unavailable`, stops retrying;
   - flushes on `visibilitychange → hidden` and `pagehide`;
   - the title-bar / phone subtitle text comes from `saveLabel(status)`: *"Saved locally at 16:30:29"*, *"Saving…"*, *"Couldn't save — retrying"*, *"Not saved (storage unavailable)"* — the dot colour follows `data-state` (green / amber / red).
+- **`media/mediaStore.ts`** keeps imported bytes (`putMedia / getMedia / deleteMedia`, `isQuotaError`, `requestPersistentStorage`). **Why IndexedDB Blobs and not OPFS:** research R-002 — OPFS exists in Safari since 15.2, but the easy main-thread write API (`createWritable`) reportedly only arrived in Safari 26, older iPhones would need a Worker path, and IndexedDB Blobs already work everywhere we target (verified on your iPhone in Phase 0). Callers only see `MediaRecord`, so swapping the backend later is local.
+- **Orphan sweep** (`sweepOrphanMedia`): at startup (undo history empty) and after *Reset demo project*, delete media no project references. It keeps anything referenced by **any** project, **including corrupt/unknown-schema and quarantined ones** (it reads raw records tolerantly), and never touches records younger than 10 minutes (an import stores bytes *before* the project references them).
 - **`opfs.ts`:** typed skeleton for Phase 1 media files: `createMediaStore()` → `write/read/remove/list` under an OPFS `media/` directory, ids restricted to `[A-Za-z0-9._-]` (can't escape the folder), `OpfsUnsupportedError` when `createWritable()` is missing (older Safari — research note R-002). Tested against an in-memory fake; **not yet exercised in a real browser**.
+
+---
+
+## 5b. Media import (Phase 1a — `src/media`)
+
+```
+file picker / drop ─► importMedia(files, store)            (queued: one import at a time)
+                         └► ingestFiles(files, deps)         (one FILE at a time — phones have little memory)
+                              per file:  classify ► size checks ► probe ► put(file) ► poster ∥ peaks ► put(poster) ► Asset
+                         └► store.execute(addAssets([...]))  ONE undo step for the whole batch
+                         └► importStore (progress/summary) ─► <ImportToast/>
+```
+- **`classify`** — kind from MIME type, else file extension (iOS often omits the type: `.MOV`, `.HEIC`, `.m4a`…). Limit 2 GiB per file.
+- **`probe`** — the browser's own decoders read the truth: `<video>`/`<audio>` metadata (duration; the `Infinity` WebM quirk is handled), `Image.decode()` for photos. A "video" with no picture becomes audio. Muted + `playsinline` + timeouts (12 s) because iOS is strict. Errors are `ProbeError`s with messages meant for people.
+- **`thumbnail`** — `makePoster` (≤320 px JPEG: photo scaled, or a video frame at 10 % / ≤1 s; `toBlob` has an 8 s guard) and `computePeaks` (`OfflineAudioContext.decodeAudioData` → 120 peaks; skipped above 60 MB; handles Safari's callback form). **Both are best-effort: failure never blocks an import** — the tile just shows an icon.
+- **`ingest`** — pure orchestration with **injected dependencies** (so every failure path is unit-tested without a browser): durations become integer frames at the project fps (photos default to 5 s); a bad file never stops the others; if anything fails after bytes were stored (e.g. storage full), what was stored for *that file* is deleted; storage-full gets its own message.
+- **`importStore` / `ImportToast`** — progress ("Importing 2 of 3 — IMG_0042.MOV"), then a result: clean successes fade after 4 s, problems stay (with each file's reason) until dismissed.
+- **`useMediaUrl`** — turns stored Blobs into ref-counted object URLs (shared between tiles, player and timeline; revoked 5 s after last use).
+- **UI:** `MediaPanel` lists *all* project assets (demo + imported; filter All/Video/Photo/Audio), real posters, durations, waveform placeholders for audio, **+** (add to timeline, selects the new clip), **⋯** (dialog: add / rename / delete-with-its-clips; undoable), desktop drag-and-drop. The player shows an imported clip's **poster** and timeline clips use it as their filmstrip — *real playback arrives in Phase 1b*. On iPhone Safari outside the Home Screen app, a one-time tip explains that Safari may clear a website's saved data after about a week unused.
+- **Performance lesson (L-024):** the import used to take 5–8 s in a software-rendered browser because the editor *opened playing* and its 60 fps re-render starved the main thread (the poster's `toBlob` took 3.8 s instead of 0.15 s). The editor now **opens paused at 00:00:00:00** (K2 fixed); the e2e suite got ~2× faster.
 
 ---
 
@@ -165,8 +190,8 @@ State: `screen` (`home|editor`), `leaving` (the screen animating out), `launch` 
 Two React contexts, deliberately split: **`FrameCtx`** (the frame; changes up to 60×/s) and **`ControlCtx`** (`playing, fps, totalFrames, toggle, pause, seek`; changes only when play/pause flips) — so buttons don't re-render per frame.
 
 - **Ticking:** `advance(acc, elapsedMs, fps)` (pure, in `clock.ts`) turns elapsed time into whole frames and carries the remainder, so speed is correct at 30/60/120/144 Hz (tests simulate all of them) and long stalls skip frames instead of slowing down.
-- `PlaybackProvider({ fps, totalFrames, startFrame, autoPlay })` takes fps and length **from the project**. It stops at the end, rewinds on play-at-end, clamps the playhead if the project shrinks (undo/delete), and handles an empty project.
-- **Prototype parity (Handover K2):** the editor still opens **playing, 2 s 45 f in** (`EDITOR_START_SECONDS = 2.75`). Phase 1 changes this together with the real audio clock.
+- `PlaybackProvider({ fps, totalFrames, startFrame = 0, autoPlay })` (the app passes `autoPlay={false}`) takes fps and length **from the project**. It stops at the end, rewinds on play-at-end, clamps the playhead if the project shrinks (undo/delete), and handles an empty project.
+- **The editor opens paused at 00:00:00:00** (Handover K2 fixed in Phase 1a — see §5b for why it mattered). Phase 1b swaps the `rAF` clock for an audio-driven master clock.
 - The level meter in the player is still a sine-wave fake until Phase 1.
 
 ---
@@ -187,7 +212,7 @@ Two React contexts, deliberately split: **`FrameCtx`** (the frame; changes up to
 `layoutTracks(tracks, metrics)` stacks rows under the ruler with per-kind heights/insets (`DESKTOP_METRICS`: ruler 16, overlay 55, main 63, audio 40; `MOBILE_METRICS`: ruler 22 + 8 pad). Tests assert the prototype's exact row positions (main 71, audio 134; phone 30 / 93). The phone hides overlay tracks that have no clips.
 
 ### Shared pieces
-`TrackClips` positions every model clip (`VideoClip`: filmstrip of `round(width/41.6)` cells, 1–90, chips from the asset name + duration; `AudioClip`: placeholder waveform, "Speed 2.0x" chip when speed ≠ 1). `TrackHeads` renders per-track controls (cover + mute on main, mute on audio) and dispatches `setTrackMuted`. `ToggleButtons` = the four toggles (stored in `prefsStore`; behaviour is Phase 2).
+`TrackClips` positions every model clip (`VideoClip`: filmstrip of `round(width/41.6)` cells, 1–90 (each cell is the asset's scene **or its real poster**), chips from the asset name + duration, plus *Effects / Filters / Adjust* chips **only when the clip actually has an effect / filter**; `AudioClip`: the asset's real `peaks` (or a placeholder waveform), "Speed 2.0x" chip when speed ≠ 1). `TrackHeads` renders per-track controls (cover + mute on main, mute on audio) and dispatches `setTrackMuted`. `ToggleButtons` = the four toggles (stored in `prefsStore`; behaviour is Phase 2).
 
 ### Phone timeline — centre playhead, scrolling content
 The playhead never moves; the content scrolls under it. `scrollLeft = (frame / fps) × pps`.
@@ -202,14 +227,14 @@ The playhead never moves; the content scrolls under it. `scrollLeft = (frame / f
 | Panel | Reads from the model | Writes via command |
 |---|---|---|
 | **TitleBar** (desktop) | project name, save status | — (menu buttons still inert) |
-| **MediaPanel** | non-audio assets → grid/list, durations (`mmss`) | — (Import / add still inert) |
-| **PlayerPanel / Stage** | the visual clip under the playhead → its scene | — |
+| **MediaPanel** | every asset → grid/list, posters, durations, filter | `addAssets` (via import), `addClipFromAsset`, `renameAsset`, `removeAsset` |
+| **PlayerPanel / Stage** | the visual clip under the playhead → its generated scene or imported poster | — |
 | **PropertiesPanel** | selected clip: filter strength, effects list, zoom, X/Y/rotate (read-only), blend mode, opacity, section on/off | `setFilterStrength`, `removeClipEffect`, `setClipZoom`, `setClipOpacity`, `setClipSectionEnabled`, `resetClipSection` |
 | **Timeline / MobileTimeline** | tracks, clips, assets, fps, duration, selection, prefs | `setTrackMuted`; selection; prefs |
 
 Shared controls (`ui/controls.tsx`): **`Slider` is now keyboard-operable** (`tabIndex=0`, `role="slider"`, `aria-label/valuenow/valuetext`, ←→↑↓ ±1, Shift ±10, PageUp/Down ±10, Home/End) with a visible focus ring. `NumberBox` has labelled ▲▼ buttons (typed entry arrives in Phase 3). Still placeholders: keyframe buttons, Position X/Y and Rotate entry, the blend-mode dropdown, all other Properties tabs.
 
-**Footage** is still generated SVG (`editor/footage/scenes.tsx`): `SceneDefs` renders `<symbol>`s once per shell; `<Scene id>` uses `<use href>`; geometry from a seeded `lcg`. An asset's `source.scene` / `source.thumb` select which symbol shows.
+**Demo footage** is still generated SVG (`editor/footage/scenes.tsx`): `SceneDefs` renders `<symbol>`s once per shell; `<Scene id>` uses `<use href>`; geometry from a seeded `lcg`. An asset's `source.scene` / `source.thumb` select which symbol shows.
 
 ---
 
@@ -228,7 +253,7 @@ Shared controls (`ui/controls.tsx`): **`Slider` is now keyboard-operable** (`tab
 
 - Styles are **real CSS files** (moved out of JS template strings; verified equivalent to the originals after minification). Prefixes: `ve-` editor, `hm-` Home, `fc-` layers/app shell, `sc-` scene animation. Tokens are CSS variables on `.ve-app` / `.hm`. `editor.css` is imported by `Editor` and therefore ships **inside the lazy editor chunk**.
 - Phase 0 CSS additions: slider focus ring, disabled toolbar buttons, audio-clip selection outline, amber/red autosave dot, Reset-demo link, boot/warning/crash styles.
-- **Build output:** initial JS 201 kB (63.6 kB gzip) + CSS 17.6 kB; editor chunk 52.7 kB (14.4 kB gzip) + CSS 25.1 kB, fetched on idle. (v1.0.0 shipped one 273.5 kB / 77.9 kB gzip bundle.) PWA precache: 18 entries, 321 KiB.
+- **Build output (v1.2.0):** initial JS 202.8 kB (64.2 kB gzip) + CSS 17.6 kB; editor chunk 69.3 kB (20.2 kB gzip) + CSS 29.5 kB, fetched on idle. (v1.0.0 shipped one 273.5 kB / 77.9 kB gzip bundle.) PWA precache: 18 entries, 344 KiB.
 
 ---
 
@@ -236,11 +261,11 @@ Shared controls (`ui/controls.tsx`): **`Slider` is now keyboard-operable** (`tab
 
 | Layer | Tool | What it proves |
 |---|---|---|
-| Pure logic | Vitest (node) | time maths, schema, migrations (incl. frozen fixture), commands, history/coalescing/transactions, clock, geometry, hero pick |
-| Persistence | Vitest + **fake-indexeddb** (real IndexedDB semantics) | save/load/list/delete, durability across reconnect, quarantine, unavailable storage + recovery, autosave debounce/serialisation/retry (fake timers), OPFS contract |
-| Components | Vitest + jsdom + Testing Library via `test/harness` | timeline from the model, mute→undo, keyboard shortcuts, Properties↔model, slider a11y, phone timeline |
+| Pure logic | Vitest (node) | time maths, schema, migrations (frozen v1 **and** v2 fixtures), commands, history/coalescing/transactions, clock, geometry, hero pick, file classification, waveform maths, **import orchestration (every failure path)** |
+| Persistence | Vitest + **fake-indexeddb** (real IndexedDB semantics) | save/load/list/delete, durability, quarantine, unavailable storage + recovery, autosave (fake timers), OPFS contract, **media blobs, a real DB v1→v2 upgrade, orphan-sweep safety rules** |
+| Components | Vitest + jsdom + Testing Library via `test/harness` | timeline from the model, mute→undo, keyboard shortcuts, Properties↔model, slider a11y, phone timeline, **library (filter, import, drop, add, rename, delete+undo), dialog focus handling, import toast, iPhone storage tip, clip chips/waveform** |
 | App | jsdom | boot → Home → lazy editor → edit → undo → Back → Forward |
-| Real browsers | **Playwright** (`e2e/`) — projects `chromium-desktop`, `chromium-phone`, `webkit-desktop`, `webkit-phone` | reload persistence (real IndexedDB), Back/Forward, K1b geometry, keyboard sliders, phone scroll-sync, quarantine, **offline PWA**, zero console errors |
+| Real browsers | **Playwright** (`e2e/`) — projects `chromium-desktop`, `chromium-phone`, `webkit-desktop`, `webkit-phone` | reload persistence (real IndexedDB), Back/Forward, K1b geometry, keyboard sliders, phone scroll-sync, quarantine, offline PWA, **importing a real WebM video, WAV and PNG (+ a corrupt file and a text file), posters/durations/waveform, add to timeline, persistence of imported media across reload, rename/delete/undo, upgrading a genuine Phase 0 database**, zero console errors |
 
 `npm run verify` = typecheck → lint → unit/component tests → build. `tsc` also type-checks tests (Vitest does not). Mutation spot-checks (deliberately breaking 7 behaviours) confirm the tests fail when the code is wrong — see Handover §6.
 
@@ -250,9 +275,9 @@ Shared controls (`ui/controls.tsx`): **`Slider` is now keyboard-operable** (`tab
 
 | Today | Becomes | Phase |
 |---|---|---|
-| Generated SVG scenes; static waveform; fake meter | Decoded frames on a WebGL2 canvas; real thumbnails/waveforms/levels | 1 |
-| `rAF` frame counter, opens playing | Audio-driven master clock, imperative playhead, opens paused | 1 |
-| 5 demo assets | Real import → OPFS + library | 1 |
+| Posters instead of playing video; fake meter; one filmstrip image per clip | Decoded frames on a WebGL2 canvas; per-frame thumbnails; real levels | 1b |
+| `rAF` frame counter | Audio-driven master clock, imperative playhead | 1b |
+| Whole-file blobs in IndexedDB | Proxies for heavy files; (maybe) OPFS where it's reliable | 1c |
 | Selection/props for one clip | Multi-select, move/trim/split/ripple, snapping | 2 |
 | `transform.zoom` (UI semantic) | Real transform/keyframes (schema v2 migration) | 3 |
 | Nothing | Render graph shared by preview and export | 4 / E1 / 7 |

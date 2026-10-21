@@ -1,6 +1,6 @@
-import { sectionDefaults } from "../model/defaults";
+import { DEFAULT_SECTIONS, DEFAULT_TRANSFORM, sectionDefaults } from "../model/defaults";
 import { clamp } from "../model/time";
-import type { BlendMode, Clip, ClipSection, Id, Project } from "../model/types";
+import type { Asset, BlendMode, Clip, ClipSection, Id, Project } from "../model/types";
 import type { Command } from "./projectStore";
 
 /** Return a project with `fn` applied to one clip; the SAME project if the clip is missing or unchanged. */
@@ -110,3 +110,76 @@ export const resetClipSection = (clipId: Id, section: ClipSection): Command =>
     const next = { ...c, ...sectionDefaults(section) };
     return JSON.stringify(next) === JSON.stringify(c) ? c : next;
   });
+
+/* ───────────── media / timeline commands (Phase 1a) ───────────── */
+
+/** Add imported assets to the library. One command = one undo step for a whole batch. Ids already present are skipped. */
+export const addAssets = (assets: Asset[]): Command => ({
+  type: "assets.add",
+  label: assets.length === 1 ? "Import media" : `Import ${assets.length} files`,
+  apply: (p) => {
+    const have = new Set(p.assets.map((a) => a.id));
+    const fresh = assets.filter((a) => !have.has(a.id));
+    return fresh.length ? { ...p, assets: [...p.assets, ...fresh] } : p;
+  },
+});
+
+export const renameAsset = (assetId: Id, name: string): Command => ({
+  type: "asset.rename",
+  label: "Rename media",
+  apply: (p) => {
+    const next = name.trim();
+    const a = p.assets.find((x) => x.id === assetId);
+    if (!a || !next || next === a.name) return p;
+    return { ...p, assets: p.assets.map((x) => (x.id === assetId ? { ...x, name: next } : x)) };
+  },
+});
+
+/** Remove an asset AND every clip that uses it, as one undoable step (undo brings both back). */
+export const removeAsset = (assetId: Id): Command => ({
+  type: "asset.remove",
+  label: "Delete media",
+  apply: (p) => {
+    if (!p.assets.some((a) => a.id === assetId)) return p;
+    return {
+      ...p,
+      assets: p.assets.filter((a) => a.id !== assetId),
+      clips: p.clips.filter((c) => c.assetId !== assetId),
+    };
+  },
+});
+
+/**
+ * Append a clip of `assetId` to the end of the matching track (audio → first audio track, otherwise the main
+ * track). `clipId` is passed in so `apply` stays pure.
+ */
+export const addClipFromAsset = (assetId: Id, clipId: Id): Command => ({
+  type: "clip.addFromAsset",
+  label: "Add to timeline",
+  apply: (p) => {
+    const asset = p.assets.find((a) => a.id === assetId);
+    if (!asset || asset.durationFrames <= 0 || p.clips.some((c) => c.id === clipId)) return p;
+    const track = p.tracks.find((t) => t.kind === (asset.kind === "audio" ? "audio" : "main"));
+    if (!track) return p;
+    const start = p.clips.reduce(
+      (end, c) => (c.trackId === track.id ? Math.max(end, c.start + c.duration) : end),
+      0,
+    );
+    const clip: Clip = {
+      id: clipId,
+      trackId: track.id,
+      assetId,
+      start,
+      duration: asset.durationFrames,
+      sourceIn: 0,
+      speed: 1,
+      transform: { ...DEFAULT_TRANSFORM },
+      opacity: 100,
+      blend: "normal",
+      filter: null,
+      effects: [],
+      sections: { ...DEFAULT_SECTIONS },
+    };
+    return { ...p, clips: [...p.clips, clip] };
+  },
+});

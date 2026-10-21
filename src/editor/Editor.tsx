@@ -2,6 +2,7 @@ import { IS_IPHONE, IS_STANDALONE } from "../app/platform";
 import { useIsMobile, type LayoutMode } from "../app/useIsMobile";
 import "../styles/editor.css";
 import { DesktopApp } from "./DesktopApp";
+import { ImportToast } from "./ImportToast";
 import { MobileApp } from "./MobileApp";
 import { useUndoRedoShortcuts } from "./shortcuts";
 
@@ -23,6 +24,7 @@ export default function Editor({ layout = "auto" }: { layout?: LayoutMode }) {
       ) : (
         <DesktopApp />
       )}
+      <ImportToast />
     </div>
   );
 }

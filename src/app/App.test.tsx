@@ -51,7 +51,10 @@ describe("App smoke test (jsdom)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     expect(store.getProject().tracks.find((t) => t.id === "track-main")!.muted).toBe(false);
 
-    // Playback autostarts (prototype behaviour, Handover K2) and can be paused
+    // The editor opens paused at the start; Play / Pause toggle
+    expect(screen.getByRole("button", { name: "Play" })).toBeTruthy();
+    expect(screen.getAllByText("00:00:00:00").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
     fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     expect(screen.getByRole("button", { name: "Play" })).toBeTruthy();
 

@@ -10,7 +10,13 @@ export type Migration = (raw: Record<string, unknown>) => Record<string, unknown
  * Add `[1]: v1ToV2` here when SCHEMA_VERSION becomes 2 — and add a frozen fixture of the old
  * shape under src/model/fixtures plus a test (see Knowledge_Contribution.md → "Add a schema migration").
  */
-export const MIGRATIONS: Record<number, Migration> = {};
+export const MIGRATIONS: Record<number, Migration> = {
+  /**
+   * v1 → v2 (Phase 1a): assets gained a `stored` source type and optional `mime` / `bytes` / `peaks`.
+   * Every v1 project is already a valid v2 project, so this only re-stamps the version (done by the runner).
+   */
+  1: (raw) => ({ ...raw }),
+};
 
 export type ProjectLoadErrorCode =
   "not-object" | "no-version" | "too-new" | "missing-migration" | "invalid";

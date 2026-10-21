@@ -1,8 +1,8 @@
 /** Tiny promise wrapper over IndexedDB — just what the project repository needs, no dependencies. */
 
 export const DB_NAME = "freecut";
-export const DB_VERSION = 1;
-export type StoreName = "projects" | "meta";
+export const DB_VERSION = 2;
+export type StoreName = "projects" | "meta" | "media";
 
 export class StorageUnavailableError extends Error {
   constructor(message = "IndexedDB is not available in this browser context") {
@@ -35,9 +35,10 @@ export function openDb(): Promise<IDBDatabase> {
     }
     req.onupgradeneeded = () => {
       const db = req.result;
-      // Future versions: branch on event.oldVersion and add stores/indexes — never delete data here.
+      // v1 → v2 (Phase 1a): added the `media` store. Upgrades NEVER delete or rewrite existing data.
       if (!db.objectStoreNames.contains("projects"))
         db.createObjectStore("projects", { keyPath: "id" });
+      if (!db.objectStoreNames.contains("media")) db.createObjectStore("media", { keyPath: "id" });
       if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta", { keyPath: "key" });
     };
     req.onsuccess = () => {
@@ -90,4 +91,6 @@ export const idbPut = (store: StoreName, value: unknown) =>
   run(store, "readwrite", (s) => s.put(value));
 export const idbDelete = (store: StoreName, key: string) =>
   run(store, "readwrite", (s) => s.delete(key));
+export const idbGetAllKeys = (store: StoreName) =>
+  run<IDBValidKey[]>(store, "readonly", (s) => s.getAllKeys());
 export const idbGetAll = <T>(store: StoreName) => run<T[]>(store, "readonly", (s) => s.getAll());

@@ -12,12 +12,9 @@ import { advance } from "./clock";
 
 /**
  * Playback state. Frame (changes up to fps×/s) and controls (stable) live in separate contexts so
- * components that only need play/pause/seek don't re-render every frame. (Phase 1 replaces the rAF clock
- * with an audio-driven master clock and an imperative playhead — see Roadmap K2/K3.)
+ * components that only need play/pause/seek don't re-render every frame. (Phase 1b replaces the rAF clock
+ * with an audio-driven master clock and an imperative playhead — Roadmap K3.) The editor opens paused at 00:00:00:00.
  */
-
-/** The prototype opened the editor 2 s 45 f in, playing. Kept for parity until Phase 1 (K2). */
-export const EDITOR_START_SECONDS = 2.75;
 
 export interface Controls {
   playing: boolean;

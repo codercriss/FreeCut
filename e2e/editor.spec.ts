@@ -1,54 +1,5 @@
-import { expect, test as base, type Page } from "@playwright/test";
-
-/** Every test fails on an uncaught page error or console error. */
-const test = base.extend<{ errors: string[] }>({
-  errors: [
-    async ({ page }, use) => {
-      const errors: string[] = [];
-      page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
-      page.on("console", (m) => {
-        if (m.type() === "error") errors.push(`console.error: ${m.text()}`);
-      });
-      await use(errors);
-      expect(errors, "no console / page errors").toEqual([]);
-    },
-    { auto: true },
-  ],
-});
-
-const openEditor = async (page: Page, isMobile: boolean) => {
-  await page.goto("/");
-  await page
-    .getByRole("button", { name: isMobile ? "New video" : "New project" })
-    .first()
-    .click();
-  await expect(page.getByRole("button", { name: "Back to home" })).toBeVisible();
-};
-const homeVisible = (page: Page, isMobile: boolean) =>
-  expect(
-    page.getByRole("button", { name: isMobile ? "New video" : "New project" }).first(),
-  ).toBeVisible();
-
-const pause = async (page: Page) => {
-  await page.getByRole("button", { name: "Pause", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
-};
-
-/** Wait out the autosave debounce (500 ms) and confirm the write landed. */
-const saved = async (page: Page) => {
-  await page.waitForTimeout(900);
-  await expect(page.locator('[role="status"][data-state]').first()).toHaveAttribute(
-    "data-state",
-    "saved",
-  );
-};
-
-const nowTimecode = async (page: Page) =>
-  (await page.locator(".ve-time.now, .ve-mob-time .now").first().innerText()).trim();
-const toFrame = (tc: string) => {
-  const [h, m, s, f] = tc.split(":").map(Number);
-  return ((h * 60 + m) * 60 + s) * 60 + f;
-};
+import { expect } from "@playwright/test";
+import { homeVisible, nowTimecode, openEditor, pause, saved, test, toFrame } from "./helpers";
 
 test("opens the editor from Home with the sample project", async ({ page, isMobile }) => {
   await openEditor(page, !!isMobile);
@@ -58,15 +9,23 @@ test("opens the editor from Home with the sample project", async ({ page, isMobi
   await expect(page.locator('[data-clip-id="clip-audio"]')).toBeVisible();
 });
 
-test("play / pause moves the playhead, and the timecode is real", async ({ page, isMobile }) => {
+test("the editor opens paused at the start; play / pause move the playhead and the timecode is real", async ({
+  page,
+  isMobile,
+}) => {
   await openEditor(page, !!isMobile);
-  const start = toFrame(await nowTimecode(page));
+  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
+  expect(await nowTimecode(page)).toBe("00:00:00:00");
+  await page.waitForTimeout(400);
+  expect(await nowTimecode(page)).toBe("00:00:00:00"); // really paused, not just labelled so
+
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.waitForTimeout(700);
   await pause(page);
   const end = toFrame(await nowTimecode(page));
-  expect(end - start).toBeGreaterThan(20); // ~0.7 s at 60 fps
+  expect(end).toBeGreaterThan(20); // ~0.7 s at 60 fps
   await page.waitForTimeout(300);
-  expect(toFrame(await nowTimecode(page))).toBe(end); // really paused
+  expect(toFrame(await nowTimecode(page))).toBe(end);
 });
 
 test("an edit survives a reload (autosave → IndexedDB) and can still be undone", async ({
@@ -168,6 +127,10 @@ test("desktop timeline: the playhead sits where the timecode says (Handover K1b)
   test.skip(!!isMobile, "desktop timeline");
   await openEditor(page, false);
   await pause(page);
+  // park the playhead at ~2.75 s by clicking the scrub bar, so the check is meaningful (not just frame 0)
+  const bar = (await page.locator(".ve-scrub").boundingBox())!;
+  await page.mouse.click(bar.x + bar.width * (2.75 / 27.97), bar.y + bar.height / 2);
+  await expect.poll(async () => toFrame(await nowTimecode(page))).toBeGreaterThan(100);
   const frame = toFrame(await nowTimecode(page));
   const left = await page
     .locator(".ve-playhead")

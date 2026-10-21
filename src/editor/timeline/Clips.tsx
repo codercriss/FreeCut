@@ -2,6 +2,7 @@ import { SlidersHorizontal, Sparkles } from "lucide-react";
 import { mmss, hhmmss } from "../../model/time";
 import type { Asset, Clip } from "../../model/types";
 import { IconFilters } from "../../ui/icons";
+import { usePosterUrl } from "../../media/useMediaUrl";
 import { lcg } from "../../util/random";
 import { Scene } from "../footage/scenes";
 import { rulerStep } from "./geometry";
@@ -89,6 +90,7 @@ export function VideoClip({
 }: VideoClipProps) {
   const frames = Math.min(90, Math.max(1, Math.round(width / 41.6)));
   const scene = asset.source.type === "generated" ? asset.source.thumb || asset.source.scene : null;
+  const poster = usePosterUrl(asset);
   return (
     <div
       className={`ve-clip ve-vclip${selected ? " sel" : ""}`}
@@ -98,24 +100,35 @@ export function VideoClip({
       aria-selected={selected}
     >
       <div className="ve-vhead">
-        <span className="ve-meta">
-          <Sparkles size={9} strokeWidth={2} />
-          Effects – Edit
-        </span>
-        <span className="ve-meta">
-          <IconFilters size={9} strokeWidth={2} />
-          Filters
-        </span>
-        <span className="ve-meta">
-          <SlidersHorizontal size={9} strokeWidth={2} />
-          Adjust
-        </span>
+        {/* Only advertise what the clip actually has (imported clips start with none). */}
+        {clip.effects.length > 0 && (
+          <span className="ve-meta">
+            <Sparkles size={9} strokeWidth={2} />
+            Effects – Edit
+          </span>
+        )}
+        {clip.filter && (
+          <>
+            <span className="ve-meta">
+              <IconFilters size={9} strokeWidth={2} />
+              Filters
+            </span>
+            <span className="ve-meta">
+              <SlidersHorizontal size={9} strokeWidth={2} />
+              Adjust
+            </span>
+          </>
+        )}
         <span className="ve-chip">{asset.name}</span>
         <span className="ve-chip">{hhmmss(clip.duration, fps)}</span>
       </div>
       <div className="ve-film">
         {Array.from({ length: frames }, (_, i) => (
-          <div className="ve-frame" key={i}>
+          <div
+            className={`ve-frame${poster ? " poster" : ""}`}
+            key={i}
+            style={poster ? { backgroundImage: `url("${poster}")` } : undefined}
+          >
             {scene && <Scene id={scene} />}
           </div>
         ))}
@@ -157,7 +170,7 @@ export function AudioClip({
         <span className="ve-chip">{hhmmss(clip.duration, fps)}</span>
       </div>
       <div className="ve-wave">
-        {WAVE.map((h, i) => (
+        {(asset.peaks ? asset.peaks.map((p) => Math.max(0.1, p / 100)) : WAVE).map((h, i) => (
           <i key={i} style={{ height: `${h * 100}%` }} />
         ))}
       </div>
