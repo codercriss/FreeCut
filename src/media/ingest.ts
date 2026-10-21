@@ -7,6 +7,7 @@ import {
   type MediaKind,
 } from "./classify";
 import { isQuotaError, posterIdOf } from "./mediaStore";
+import type { PosterResult } from "./poster";
 import { ProbeError, type Probe } from "./probe";
 
 export type ItemState = "queued" | "working" | "done" | "error";
@@ -20,7 +21,7 @@ export interface ImportItem {
 
 export interface IngestDeps {
   probe(file: File, hint: MediaKind): Promise<Probe>;
-  poster(file: File, probe: Probe): Promise<Blob | null>;
+  poster(file: File, probe: Probe): Promise<PosterResult>;
   peaks(file: File, probe: Probe): Promise<number[] | null>;
   put(id: string, blob: Blob): Promise<void>;
   remove(id: string): Promise<void>;
@@ -32,6 +33,8 @@ export interface IngestDeps {
 export interface IngestResult {
   assets: Asset[];
   failed: Array<{ name: string; message: string }>;
+  /** Imported fine, but something nice-to-have is missing (e.g. no preview picture). */
+  warnings: Array<{ name: string; message: string }>;
 }
 
 export const NOT_MEDIA = "Not a video, audio or photo file.";
@@ -40,7 +43,10 @@ const tooBig = (n: number) =>
   `This file is too large (${formatBytes(n)}). The limit is ${formatBytes(MAX_FILE_BYTES)}.`;
 
 /** Turn one file into an Asset, storing its bytes (and poster). Throws ProbeError-style messages for people. */
-async function ingestOne(file: File, deps: IngestDeps): Promise<Asset> {
+async function ingestOne(
+  file: File,
+  deps: IngestDeps,
+): Promise<{ asset: Asset; warning?: string }> {
   const hint = classifyFile(file);
   if (!hint) throw new ProbeError(NOT_MEDIA);
   if (file.size > MAX_FILE_BYTES) throw new ProbeError(tooBig(file.size));
@@ -55,20 +61,27 @@ async function ingestOne(file: File, deps: IngestDeps): Promise<Asset> {
     stored.push(mediaId);
 
     // Thumbnails and waveforms are nice-to-have: failure never blocks the import.
-    const [poster, peaks] = await Promise.all([
-      deps.poster(file, probe).catch(() => null),
+    const [posterResult, peaks] = await Promise.all([
+      deps.poster(file, probe).catch((e): PosterResult => ({
+        blob: null,
+        notes: [`error: ${e instanceof Error ? e.message : String(e)}`],
+      })),
       deps.peaks(file, probe).catch(() => null),
     ]);
-    if (poster) {
-      await deps.put(posterIdOf(mediaId), poster);
+    if (posterResult.blob) {
+      await deps.put(posterIdOf(mediaId), posterResult.blob);
       stored.push(posterIdOf(mediaId));
     }
+    const warning =
+      !posterResult.blob && probe.kind !== "audio"
+        ? `No preview picture could be made (${posterResult.notes.join(" · ") || "unknown reason"}). Open its ⋯ menu → Create thumbnail to try again.`
+        : undefined;
 
     const durationFrames =
       probe.kind === "image"
         ? Math.round(IMAGE_SECONDS * deps.fps)
         : Math.max(1, Math.round(probe.durationSec * deps.fps));
-    return {
+    const asset: Asset = {
       id: assetId,
       kind: probe.kind,
       name: file.name || "Untitled",
@@ -79,6 +92,7 @@ async function ingestOne(file: File, deps: IngestDeps): Promise<Asset> {
       bytes: file.size,
       ...(peaks ? { peaks } : {}),
     };
+    return { asset, warning };
   } catch (e) {
     await Promise.all(stored.map((id) => deps.remove(id).catch(() => undefined)));
     throw e;
@@ -109,11 +123,14 @@ export async function ingestFiles(
   emit();
   const assets: Asset[] = [];
   const failed: IngestResult["failed"] = [];
+  const warnings: IngestResult["warnings"] = [];
   for (let i = 0; i < files.length; i++) {
     items[i].state = "working";
     emit();
     try {
-      assets.push(await ingestOne(files[i], deps));
+      const one = await ingestOne(files[i], deps);
+      assets.push(one.asset);
+      if (one.warning) warnings.push({ name: items[i].name, message: one.warning });
       items[i].state = "done";
     } catch (e) {
       const message = messageOf(e);
@@ -124,5 +141,5 @@ export async function ingestFiles(
     }
     emit();
   }
-  return { assets, failed };
+  return { assets, failed, warnings };
 }

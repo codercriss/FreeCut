@@ -14,7 +14,9 @@ import { useMemo, useRef, useState, type DragEvent } from "react";
 import { IS_IPHONE, IS_STANDALONE } from "../app/platform";
 import { ACCEPT, formatBytes, newId } from "../media/classify";
 import { importMedia } from "../media/importer";
-import { usePosterUrl } from "../media/useMediaUrl";
+import { getMedia, posterIdOf, putMedia } from "../media/mediaStore";
+import { makePosterDetailed } from "../media/thumbnail";
+import { refreshMedia, useMediaUrl, usePosterUrl } from "../media/useMediaUrl";
 import { mmss } from "../model/time";
 import type { Asset, AssetKind, Id } from "../model/types";
 import { addClipFromAsset, removeAsset, renameAsset } from "../store/commands";
@@ -59,6 +61,9 @@ function AssetArt({ asset }: { asset: Asset }) {
   const Icon = asset.kind === "audio" ? Music : asset.kind === "image" ? ImageIcon : Film;
   return (
     <div className={`ve-ph ${asset.kind}`} aria-hidden="true">
+      {asset.kind === "video" && asset.source.type === "stored" && (
+        <FirstFrame mediaId={asset.source.mediaId} />
+      )}
       {asset.kind === "audio" && asset.peaks ? (
         <span className="ve-ph-wave">
           {asset.peaks
@@ -74,7 +79,69 @@ function AssetArt({ asset }: { asset: Asset }) {
   );
 }
 
+/** No poster? Let the browser's own player paint the first frame behind the icon (worth a try on iOS). */
+function FirstFrame({ mediaId }: { mediaId: string }) {
+  const url = useMediaUrl(mediaId);
+  if (!url) return null;
+  return (
+    <video
+      className="ve-art ve-art-raw"
+      src={`${url}#t=0.1`}
+      muted
+      playsInline
+      preload="metadata"
+      tabIndex={-1}
+    />
+  );
+}
+
 type DialogMode = "menu" | "rename" | "delete";
+type ThumbState =
+  | { state: "idle" }
+  | { state: "working" }
+  | { state: "done" }
+  | { state: "failed"; notes: string[] };
+
+/** Retry making a preview picture from the stored file. Runs inside a tap, which iOS likes. */
+function ThumbnailAction({ asset }: { asset: Asset }) {
+  const poster = usePosterUrl(asset);
+  const fps = useProject((p) => p.settings.fps);
+  const [t, setT] = useState<ThumbState>({ state: "idle" });
+  if (asset.source.type !== "stored" || asset.kind === "audio" || (poster && t.state !== "working"))
+    return null;
+  const mediaId = asset.source.mediaId;
+  const run = async () => {
+    setT({ state: "working" });
+    try {
+      const blob = await getMedia(mediaId);
+      if (!blob) return setT({ state: "failed", notes: ["the stored file could not be found"] });
+      const r = await makePosterDetailed(blob, {
+        kind: asset.kind,
+        durationSec: asset.durationFrames / fps,
+      });
+      if (r.blob) {
+        await putMedia(posterIdOf(mediaId), r.blob);
+        refreshMedia(posterIdOf(mediaId));
+        setT({ state: "done" });
+      } else setT({ state: "failed", notes: r.notes });
+    } catch (e) {
+      setT({ state: "failed", notes: [e instanceof Error ? e.message : String(e)] });
+    }
+  };
+  return (
+    <>
+      <button onClick={run} disabled={t.state === "working"}>
+        {t.state === "working" ? "Creating thumbnail…" : "Create thumbnail"}
+      </button>
+      {t.state === "failed" && (
+        <div className="ve-dialog-diag" role="status">
+          Couldn’t make a thumbnail. Details (you can screenshot this):
+          <pre>{t.notes.join("\n")}</pre>
+        </div>
+      )}
+    </>
+  );
+}
 
 function AssetDialog({
   asset,
@@ -160,6 +227,7 @@ function AssetDialog({
         >
           Add to timeline
         </button>
+        <ThumbnailAction asset={asset} />
         <button onClick={() => setMode("rename")}>Rename…</button>
         <button className="danger" onClick={() => setMode("delete")}>
           Delete…

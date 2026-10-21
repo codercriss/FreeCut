@@ -33,7 +33,11 @@ describe("ImportToast", () => {
     vi.useFakeTimers();
     render(<ImportToast />);
     act(() =>
-      importStore.setState({ running: false, items: [], summary: { added: 2, failed: [] } }),
+      importStore.setState({
+        running: false,
+        items: [],
+        summary: { added: 2, failed: [], warnings: [] },
+      }),
     );
     expect(screen.getByRole("status").textContent).toContain("Added 2 files to the library.");
     act(() => void vi.advanceTimersByTime(4100));
@@ -53,6 +57,7 @@ describe("ImportToast", () => {
             { name: "broken.mp4", message: "This browser can’t play this video format." },
             { name: "notes.txt", message: "Not a video, audio or photo file." },
           ],
+          warnings: [],
         },
       }),
     );
@@ -65,13 +70,40 @@ describe("ImportToast", () => {
     expect(screen.queryByRole("status")).toBeNull();
   });
 
+  it("a missing preview picture is shown as a warning and keeps the box on screen", () => {
+    vi.useFakeTimers();
+    render(<ImportToast />);
+    act(() =>
+      importStore.setState({
+        running: false,
+        items: [],
+        summary: {
+          added: 1,
+          failed: [],
+          warnings: [
+            {
+              name: "IMG_1.MOV",
+              message:
+                "No preview picture could be made (play() refused). Open its ⋯ menu → Create thumbnail to try again.",
+            },
+          ],
+        },
+      }),
+    );
+    act(() => void vi.advanceTimersByTime(10000));
+    const t = screen.getByRole("status");
+    expect(t.textContent).toContain("Added 1 file to the library.");
+    expect(t.textContent).toContain("IMG_1.MOV");
+    expect(t.textContent).toContain("Create thumbnail");
+  });
+
   it("says so when nothing was imported", () => {
     render(<ImportToast />);
     act(() =>
       importStore.setState({
         running: false,
         items: [],
-        summary: { added: 0, failed: [{ name: "x", message: "m" }] },
+        summary: { added: 0, failed: [{ name: "x", message: "m" }], warnings: [] },
       }),
     );
     expect(screen.getByRole("status").textContent).toContain("Nothing was imported.");

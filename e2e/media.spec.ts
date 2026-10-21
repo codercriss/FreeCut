@@ -257,3 +257,55 @@ test("an existing Phase 0 project (database v1, schema v1) upgrades without losi
   expect(stored.name).toBe("Edited on iPhone");
   expect(stored.assets).toBe(7); // 6 demo + 1 imported
 });
+
+test("no thumbnail? the browser's own first frame fills in, and Create thumbnail brings the picture back", async ({
+  page,
+  isMobile,
+}) => {
+  await openLibrary(page, !!isMobile);
+  await importFiles(page, [VIDEO]);
+  await expect(toast(page)).toContainText("Added 1 file");
+  await loaded(tile(page, "clip.webm").locator("img.ve-art"));
+  await saved(page);
+
+  // Simulate "this phone couldn't make a poster": delete the poster behind the app's back, then reload.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open("freecut");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction("media", "readwrite");
+          const store = tx.objectStore("media");
+          const keys = store.getAllKeys();
+          keys.onsuccess = () => {
+            for (const k of keys.result) if (String(k).endsWith(":poster")) store.delete(k);
+          };
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+        };
+      }),
+  );
+  await page.reload();
+  await openLibrary(page, !!isMobile);
+
+  const t = tile(page, "clip.webm");
+  await expect(t.locator("img.ve-art")).toHaveCount(0);
+  await expect(t.locator(".ve-ph.video")).toBeVisible(); // icon placeholder
+  await expect(t.locator("video.ve-art-raw")).toHaveCount(1); // …with the browser's own first frame layered on it
+  await expect
+    .poll(() => t.locator("video.ve-art-raw").evaluate((v: HTMLVideoElement) => v.videoWidth))
+    .toBeGreaterThan(0);
+
+  // retry from the menu
+  await page.getByRole("button", { name: "More options for clip.webm" }).click();
+  await page.getByRole("button", { name: "Create thumbnail" }).click();
+  await expect(page.getByRole("button", { name: "Create thumbnail" })).toHaveCount(0); // done: the button goes away
+  await page.getByRole("button", { name: "Add to timeline" }).waitFor();
+  await page.keyboard.press("Escape");
+  await loaded(t.locator("img.ve-art"));
+  await expect(t.locator("video.ve-art-raw")).toHaveCount(0);
+});

@@ -387,6 +387,18 @@ Add to the right section below. Keep entries short, dated, and evidence-based. *
 ### L-033 — Prettier reflows code, so scripted edits must not assume line shapes   (2026-10-16 · tooling · verified three times)
 **Finding:** multi-line JSX and long conditions defeat regex/single-line string replacement after a format pass (twice this phase an edit applied halfway and produced a syntax error that `tsc` caught). **Impact:** edit with anchored multi-line replacements and run `tsc` immediately after any scripted change.
 
+### L-034 — iOS Safari and video thumbnails: what we know and what we don't   (2026-10-20 · iOS · evidence: owner's iPhone X, iOS 16; cause = hypothesis)
+**Observed (verified):** on iPhone X / iOS 16 the 1.2.0 poster maker returned nothing for an `.mp4`, while the metadata (duration) read fine and the import succeeded. The same code worked in Chromium. **Hypothesis (not proven):** iOS ignores `preload="auto"` for a video nobody asked to play, may not paint frames for a detached element, and a seek needs decoded data. **Remedy built (1.2.1):** attach an invisible muted `playsinline` element, `play()` briefly, pause, seek, wait for a presented frame, draw; distrust blank pictures; fall back to seek-only; browser-native first-frame fallback; user-triggered retry with notes. **Impact:** the unit tests encode the *hypothesis* (an iOS-like fake that only loads frames after `play()`); only the phone can confirm it. Keep the notes — they are the instrument.
+
+### L-035 — When you can't test a platform, make the product its own test rig   (2026-10-20 · process)
+**Finding:** with an owner who has one iPhone and an assistant with none, the fastest loop is: failure → *visible reason in the UI* → owner screenshots it → targeted fix. So import warnings carry the step trail and ⋯ → Create thumbnail shows it on failure. **Impact:** any feature that depends on a browser quirk should ship with a user-visible "why it failed" path, not just a console log (an iPhone has no console).
+
+### L-036 — A blank canvas is not a picture   (2026-10-20 · robustness · verified in tests)
+**Finding:** when a browser draws no frame, `drawImage` silently leaves the canvas empty; encoding it yields a valid black JPEG that would *hide* every fallback and the retry button. `isBlankPixels` samples the result, and a blank picture is accepted only if the video really reported a decoded frame (`readyState ≥ 2`). **Impact:** validate the *output* of anything that can silently produce nothing.
+
+### L-037 — Simulate the quirk, don't just mock the success   (2026-10-20 · testing)
+**Finding:** a scriptable `FakeVideo` (events fire only after `play()`; `play()` refused; never loads; no picture size) found two real design flaws before they shipped — the black-canvas problem above and wrong error descriptions. A test that documents the *old* behaviour ("the old approach would have failed on the iOS-like video") keeps the reason for the design visible.
+
 ---
 
 ## B4. Glossary

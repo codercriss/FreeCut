@@ -9,7 +9,7 @@ const file = (name: string, type: string) => new File([new Uint8Array(8)], name,
 let n = 0;
 const fakeDeps = (over: Partial<IngestDeps> = {}): IngestDeps => ({
   probe: async (_f, hint) => ({ kind: hint, durationSec: 2, width: 100, height: 100, mime: "" }),
-  poster: async () => null,
+  poster: async () => ({ blob: null, notes: [] }),
   peaks: async () => null,
   put: async () => undefined,
   remove: async () => undefined,

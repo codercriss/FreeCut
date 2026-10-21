@@ -5,12 +5,12 @@ import { importStore } from "./importStore";
 import { deleteMedia, putMedia, requestPersistentStorage } from "./mediaStore";
 import { newId } from "./classify";
 import { probeMedia } from "./probe";
-import { computePeaks, makePoster } from "./thumbnail";
+import { computePeaks, makePosterDetailed } from "./thumbnail";
 
 /** The real, browser-backed dependencies. */
 export const browserDeps = (fps: number): IngestDeps => ({
   probe: (f, hint) => probeMedia(f, hint),
-  poster: (f, p) => makePoster(f, p),
+  poster: (f, p) => makePosterDetailed(f, p),
   peaks: (f, p) => computePeaks(f, p),
   put: (id, blob) => putMedia(id, blob),
   remove: (id) => deleteMedia(id),
@@ -41,7 +41,7 @@ export function importMedia(
     importStore.setState((s) => ({
       ...s,
       running: false,
-      summary: { added: result.assets.length, failed: result.failed },
+      summary: { added: result.assets.length, failed: result.failed, warnings: result.warnings },
     }));
     return result;
   };

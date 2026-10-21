@@ -153,6 +153,8 @@ Each phase lists **scope**, **new capabilities beyond what the UI currently sugg
 *Make footage real.* Delivered in three parts: **1a import & library ✔**, **1b preview & audio**, **1c projects & heavy files**.
 
 #### 1a — Import & library ✔ DELIVERED (v1.2.0)
+**Patch 1.2.1 (after your iPhone X / iOS 16 test):** import, storage and timeline worked; the video thumbnail did not → thumbnail maker rewritten for iOS, browser-native first-frame fallback, ⋯ → Create thumbnail with diagnostics, import warnings that say why. Needs your retest.
+
 **Done:** file picker + desktop drag-and-drop · classification by MIME/extension (incl. iPhone `.MOV`/`.HEIC`) · probing with the browser's decoders (duration, size; audio-only "video" detected) · posters for photos/videos · waveform summary for audio · media stored as IndexedDB Blobs with a quota-aware, cleanup-on-failure ingest · one-undo-step batches · library with real thumbnails, durations, type filter, rename, delete-with-its-clips (undoable) · **+** add to timeline (photos default to 5 s) · import progress/result toast with per-file reasons · iPhone "add to Home Screen" tip · orphan sweep · **schema v2 + a real v1→v2 migration** · research **R-002** (IndexedDB chosen over OPFS) · **editor opens paused** (K2) which also made imports ~2× faster in tests.
 
 **Not done in 1a** (deliberately): real playback of video/audio (1b); per-frame filmstrip thumbnails (1b); search/sort and duplicate detection (1c); relink missing files (1c); proxies for heavy files and a storage-usage screen (1c); Home "Import media" opens the sheet but can't open the file picker itself (needs a tap — platform rule); folder import; paste import; HEIC fallback conversion where the browser can't decode it; waveform for video files.
@@ -382,7 +384,8 @@ Updated at the end of each phase delivery.
 | Baseline v1.0.0 | ✔ received & analysed | 2026-10-16 | Docs added (`freecut-baseline-docs.zip`). No code changed. |
 | **0** | ✔ **delivered & reviewed on iPhone Safari — all steps passed** | 2026-10-16 | `freecut-phase-0.zip`, v1.1.0 |
 | **1a** | ✔ **delivered — awaiting your review** | 2026-10-20 | `freecut-phase-1a.zip` (+ `freecut-phase-1a-changes.zip`), v1.2.0. Phone review script: `Handover.md §10` |
-| 1b | ☐ next | — | preview & audio |
+| **1a.1** | ✔ **delivered — needs your iPhone retest** | 2026-10-20 | v1.2.1: iPhone video-thumbnail fix + fallbacks + diagnostics (`Handover.md §10`, R1–R7) |
+| 1b | ☐ next (after the retest) | — | preview & audio |
 | 1c | ☐ | — | projects & heavy files |
 | 2 | ☐ | — | |
 | E1 | ☐ | — | thin export (after 2) |

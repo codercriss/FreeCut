@@ -2221,3 +2221,35 @@
     opacity: 1;
   }
 }
+
+/* Phase 1a.1: warnings, thumbnail diagnostics, first-frame fallback */
+.ve-toast-warn {
+  color: #ffd699;
+  font-size: 11px;
+}
+.ve-dialog-diag {
+  color: var(--dim);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.ve-dialog-diag pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #131315;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+  font-size: 10px;
+}
+.ve-thumb,
+.ve-lthumb {
+  position: relative;
+}
+.ve-art-raw {
+  position: absolute;
+  inset: 0;
+  object-fit: cover;
+  pointer-events: none;
+}

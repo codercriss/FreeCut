@@ -4,7 +4,7 @@ import { usePlayback } from "../engine/playback";
 import { activeVisualClip, assetById } from "../model/selectors";
 import { timecode } from "../model/time";
 import type { Asset } from "../model/types";
-import { usePosterUrl } from "../media/useMediaUrl";
+import { useMediaUrl, usePosterUrl } from "../media/useMediaUrl";
 import { useProject } from "../store/ProjectContext";
 import { IconFit } from "../ui/icons";
 import { Scene } from "./footage/scenes";
@@ -25,10 +25,27 @@ export function Stage({ frame }: { frame: number }) {
   const asset = useStageAsset(frame);
   const poster = usePosterUrl(asset);
   const scene = asset && asset.source.type === "generated" ? asset.source.scene : null;
+  // No poster could be made (some browsers refuse): let the browser's own player show the first frame.
+  const rawId =
+    asset && asset.source.type === "stored" && asset.kind === "video" && !poster
+      ? asset.source.mediaId
+      : null;
+  const rawUrl = useMediaUrl(rawId);
   return (
     <div className="ve-video">
       {scene && <Scene id={scene} />}
       {poster && <img className="ve-stage-img" src={poster} alt="" draggable={false} />}
+      {rawUrl && (
+        <video
+          className="ve-stage-img"
+          src={`${rawUrl}#t=0.1`}
+          muted
+          playsInline
+          preload="metadata"
+          aria-hidden="true"
+          tabIndex={-1}
+        />
+      )}
     </div>
   );
 }

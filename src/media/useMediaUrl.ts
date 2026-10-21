@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Asset } from "../model/types";
+import { createStore, useStore } from "../store/createStore";
 import { getMedia, posterIdOf } from "./mediaStore";
 
 interface Entry {
@@ -8,13 +9,25 @@ interface Entry {
   ready: Promise<void>;
 }
 const cache = new Map<string, Entry>();
+/** Bumped by `refreshMedia` so every component showing that media re-reads it. */
+const versions = createStore<Record<string, number>>({});
+
+/** Call after (re)writing a media record (e.g. a thumbnail created later) so the UI picks it up. */
+export function refreshMedia(id: string): void {
+  const old = cache.get(id);
+  cache.delete(id);
+  if (old?.url) setTimeout(() => URL.revokeObjectURL(old.url!), KEEP_MS); // still on screen until components re-read
+  versions.setState((v) => ({ ...v, [id]: (v[id] ?? 0) + 1 }));
+}
 
 /** How long an unused object URL is kept (avoids re-reading the blob when a list re-renders or scrolls). */
 const KEEP_MS = 5000;
 
 /** An object URL for a stored blob (or null while loading / when missing). Shared + ref-counted; revoked when unused. */
 export function useMediaUrl(id: string | null): string | null {
+  const version = useStore(versions, (v) => (id ? (v[id] ?? 0) : 0));
   const [url, setUrl] = useState<string | null>(() => (id ? (cache.get(id)?.url ?? null) : null));
+  const shownFor = useRef<string | null>(id);
   useEffect(() => {
     if (!id) {
       setUrl(null);
@@ -37,7 +50,10 @@ export function useMediaUrl(id: string | null): string | null {
     }
     const e = entry;
     e.refs += 1;
-    setUrl(e.url);
+    // Same media being refreshed: keep showing the old picture until the new one is ready (no flash to the placeholder).
+    // Different media: clear straight away so a stale picture is never shown under the wrong name.
+    if (e.url || shownFor.current !== id) setUrl(e.url);
+    shownFor.current = id;
     void e.ready.then(() => live && setUrl(e.url));
     return () => {
       live = false;
@@ -51,7 +67,7 @@ export function useMediaUrl(id: string | null): string | null {
         }, KEEP_MS);
       }
     };
-  }, [id]);
+  }, [id, version]);
   return url;
 }
 

@@ -1,6 +1,6 @@
 # How FreeCut works
 
-> **Scope:** the mechanics of the app **as built at v1.2.0 (end of Phase 1a — real media import & library)**. Verified by reading the source, by 246 unit/component tests, by Chromium end-to-end runs with real video/audio/photo files, and (for the Phase 0 base) by hand on iPhone Safari.
+> **Scope:** the mechanics of the app **as built at v1.2.1 (Phase 1a + the iPhone thumbnail patch)**. Verified by reading the source, by 272 unit/component tests, by Chromium end-to-end runs with real video/audio/photo files, and (for the Phase 0 base) by hand on iPhone Safari.
 > This file is **rewritten as the architecture changes** — every phase updates the relevant sections, so it always describes what is actually in the zip, not what we hope for.
 > Companions: `Handover.md` (status, issues, review script), `Roadmap.md` (plan), `Knowledge_Contribution.md` (how to contribute, learnings).
 
@@ -30,7 +30,7 @@ index.html ─► src/main.tsx ─► <ErrorBoundary><App/></ErrorBoundary>
 - **One component tree, two layouts.** Panels are shared; the shell around them differs for desktop vs phone.
 - **Local-first, no backend.** No network calls at runtime. Storage is IndexedDB: the project **and** imported media files (as Blobs). OPFS stays an unused skeleton (see §5).
 
-### Source map (v1.2.0)
+### Source map (v1.2.1)
 
 | Folder | What lives there |
 |---|---|
@@ -38,7 +38,7 @@ index.html ─► src/main.tsx ─► <ErrorBoundary><App/></ErrorBoundary>
 | `src/model/` | **Project model v1**: `types`, `time`, `defaults`, `selectors`, `sample` project, `schema` validator, `migrations` runner, frozen `fixtures/` |
 | `src/store/` | `createStore` + `useStore`, **`projectStore`** (history), `commands`, `editorStore` (selection), `prefsStore`, React context hooks |
 | `src/storage/` | `idb` wrapper (DB v2), `projectRepo`, `autosave`, `opfs` skeleton |
-| `src/media/` | **Phase 1a import pipeline:** `classify`, `probe`, `thumbnail` (posters + waveform), `ingest`, `importer`, `importStore`, `mediaStore` (+ orphan sweep), `useMediaUrl` |
+| `src/media/` | **Phase 1a import pipeline:** `classify`, `probe`, `poster` (video → picture logic), `thumbnail` (posters + waveform), `ingest`, `importer`, `importStore`, `mediaStore` (+ orphan sweep), `useMediaUrl` |
 | `src/engine/` | Playback clock (`clock`, `playback`) — becomes the real engine from Phase 1 |
 | `src/editor/` | Editor shell + panels; `timeline/` (geometry, ruler, clips, desktop + phone timelines); `footage/` (generated SVG scenes) |
 | `src/home/` | Home screen, hero scenes, hero-pick logic |
@@ -159,11 +159,11 @@ file picker / drop ─► importMedia(files, store)            (queued: one impo
 ```
 - **`classify`** — kind from MIME type, else file extension (iOS often omits the type: `.MOV`, `.HEIC`, `.m4a`…). Limit 2 GiB per file.
 - **`probe`** — the browser's own decoders read the truth: `<video>`/`<audio>` metadata (duration; the `Infinity` WebM quirk is handled), `Image.decode()` for photos. A "video" with no picture becomes audio. Muted + `playsinline` + timeouts (12 s) because iOS is strict. Errors are `ProbeError`s with messages meant for people.
-- **`thumbnail`** — `makePoster` (≤320 px JPEG: photo scaled, or a video frame at 10 % / ≤1 s; `toBlob` has an 8 s guard) and `computePeaks` (`OfflineAudioContext.decodeAudioData` → 120 peaks; skipped above 60 MB; handles Safari's callback form). **Both are best-effort: failure never blocks an import** — the tile just shows an icon.
+- **`poster` + `thumbnail`** — a small JPEG still (≤320 px) for photos and videos, plus a **trail of notes** about what happened. Photos: `Image.decode()` → canvas, falling back to `createImageBitmap`. **Videos (reworked in 1.2.1 for iOS):** `posterFromVideo` attaches an invisible 2 px muted `<video>` to the page (iOS may not decode detached/hidden ones), briefly **plays** it (iOS ignores `preload="auto"` and may not decode a frame until play is requested), pauses, seeks to 10 % (≤1 s), waits for a presented frame (`requestVideoFrameCallback` where available), and draws. If that route fails it retries with a plain seek-only element. A **blank (all-black) result is distrusted** and retried; it's only accepted if the browser really had a decoded frame (a video can start black) — an empty canvas is never mistaken for a picture. Overall budget 9 s. Every step appends to the notes (`play: metadata 1920×1080, play() ok, frame ready via canplay, seeked, picture ok`). `computePeaks` (`OfflineAudioContext.decodeAudioData` → 120 peaks; skipped above 60 MB; Safari callback form handled). **All best-effort: failure never blocks an import.** The browser is injected (`PosterEnv`), so the iOS-style quirks (frames only after `play()`, refused `play()`, never-loading decoder, blank frames) are unit-tested; *whether the model matches real iOS is confirmed only on a phone*.
 - **`ingest`** — pure orchestration with **injected dependencies** (so every failure path is unit-tested without a browser): durations become integer frames at the project fps (photos default to 5 s); a bad file never stops the others; if anything fails after bytes were stored (e.g. storage full), what was stored for *that file* is deleted; storage-full gets its own message.
-- **`importStore` / `ImportToast`** — progress ("Importing 2 of 3 — IMG_0042.MOV"), then a result: clean successes fade after 4 s, problems stay (with each file's reason) until dismissed.
-- **`useMediaUrl`** — turns stored Blobs into ref-counted object URLs (shared between tiles, player and timeline; revoked 5 s after last use).
-- **UI:** `MediaPanel` lists *all* project assets (demo + imported; filter All/Video/Photo/Audio), real posters, durations, waveform placeholders for audio, **+** (add to timeline, selects the new clip), **⋯** (dialog: add / rename / delete-with-its-clips; undoable), desktop drag-and-drop. The player shows an imported clip's **poster** and timeline clips use it as their filmstrip — *real playback arrives in Phase 1b*. On iPhone Safari outside the Home Screen app, a one-time tip explains that Safari may clear a website's saved data after about a week unused.
+- **`importStore` / `ImportToast`** — progress ("Importing 2 of 3 — IMG_0042.MOV"), then a result: clean successes fade after 4 s; **failures** (with each file's reason) and **warnings** stay until dismissed. A *warning* means "imported fine, but no preview picture could be made (reason…) — open ⋯ → Create thumbnail to try again".
+- **`useMediaUrl`** — turns stored Blobs into ref-counted object URLs (shared between tiles, player and timeline; revoked 5 s after last use). `refreshMedia(id)` makes every component re-read a record written later (a retried thumbnail) and keeps the old picture on screen until the new one is ready (no flash).
+- **UI:** `MediaPanel` lists *all* project assets (demo + imported; filter All/Video/Photo/Audio), real posters, durations, waveform placeholders for audio, **+** (add to timeline, selects the new clip), **⋯** (dialog: add / rename / delete-with-its-clips; undoable), desktop drag-and-drop. The player shows an imported clip's **poster** and timeline clips use it as their filmstrip — *real playback arrives in Phase 1b*. **If a video has no poster** the tile (and the player) layer the browser's own `<video src="…#t=0.1">` first frame over the icon, and ⋯ → **Create thumbnail** retries on demand — inside a tap, which iOS likes — and shows the step-by-step notes if it still fails. On iPhone Safari outside the Home Screen app, a one-time tip explains that Safari may clear a website's saved data after about a week unused.
 - **Performance lesson (L-024):** the import used to take 5–8 s in a software-rendered browser because the editor *opened playing* and its 60 fps re-render starved the main thread (the poster's `toBlob` took 3.8 s instead of 0.15 s). The editor now **opens paused at 00:00:00:00** (K2 fixed); the e2e suite got ~2× faster.
 
 ---
@@ -261,7 +261,7 @@ Shared controls (`ui/controls.tsx`): **`Slider` is now keyboard-operable** (`tab
 
 | Layer | Tool | What it proves |
 |---|---|---|
-| Pure logic | Vitest (node) | time maths, schema, migrations (frozen v1 **and** v2 fixtures), commands, history/coalescing/transactions, clock, geometry, hero pick, file classification, waveform maths, **import orchestration (every failure path)** |
+| Pure logic | Vitest (node) | **iOS-style poster simulations**, time maths, schema, migrations (frozen v1 **and** v2 fixtures), commands, history/coalescing/transactions, clock, geometry, hero pick, file classification, waveform maths, **import orchestration (every failure path)** |
 | Persistence | Vitest + **fake-indexeddb** (real IndexedDB semantics) | save/load/list/delete, durability, quarantine, unavailable storage + recovery, autosave (fake timers), OPFS contract, **media blobs, a real DB v1→v2 upgrade, orphan-sweep safety rules** |
 | Components | Vitest + jsdom + Testing Library via `test/harness` | timeline from the model, mute→undo, keyboard shortcuts, Properties↔model, slider a11y, phone timeline, **library (filter, import, drop, add, rename, delete+undo), dialog focus handling, import toast, iPhone storage tip, clip chips/waveform** |
 | App | jsdom | boot → Home → lazy editor → edit → undo → Back → Forward |

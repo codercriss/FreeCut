@@ -5,7 +5,7 @@ import { useStore } from "../store/createStore";
 /** Progress and result of an import, shown over either layout. Successes fade away; problems stay until dismissed. */
 export function ImportToast() {
   const s = useStore(importStore, (x) => x);
-  const clean = !!s.summary && s.summary.failed.length === 0;
+  const clean = !!s.summary && s.summary.failed.length === 0 && s.summary.warnings.length === 0;
   useEffect(() => {
     if (!clean) return undefined;
     const t = setTimeout(dismissImport, 4000);
@@ -38,6 +38,11 @@ export function ImportToast() {
               </span>
               <button onClick={dismissImport}>{clean ? "OK" : "Dismiss"}</button>
             </div>
+            {s.summary.warnings.map((w, i) => (
+              <div key={`w${i}`} className="ve-toast-warn">
+                <b>{w.name}</b> — {w.message}
+              </div>
+            ))}
             {s.summary.failed.map((f, i) => (
               <div key={i} className="ve-toast-err">
                 <b>{f.name}</b> — {f.message}

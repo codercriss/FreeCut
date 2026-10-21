@@ -20,7 +20,9 @@ function deps(over: Partial<IngestDeps> = {}) {
       mime: f.type,
     })),
     poster: vi.fn(async (_f: File, p: Probe) =>
-      p.kind === "audio" ? null : new Blob(["poster"], { type: "image/jpeg" }),
+      p.kind === "audio"
+        ? { blob: null, notes: ["audio has no picture"] }
+        : { blob: new Blob(["poster"], { type: "image/jpeg" }), notes: [] },
     ),
     peaks: vi.fn(async (_f: File, p: Probe) => (p.kind === "audio" ? [10, 100, 30] : null)),
     put: vi.fn(async (id: string, b: Blob) => void stored.set(id, b)),
@@ -188,6 +190,43 @@ describe("ingestFiles", () => {
     expect(snaps[0].map((i) => i.state)).toEqual(["queued", "queued"]);
     expect(snaps.at(-1)!.map((i) => i.state)).toEqual(["done", "done"]);
     expect(snaps.some((s) => s[0].state === "working" && s[1].state === "queued")).toBe(true);
+  });
+
+  it("no preview picture -> the import still succeeds, with a warning that says why and how to retry", async () => {
+    const { d, stored } = deps({
+      poster: vi.fn(async (_f: File, p: Probe) =>
+        p.kind === "audio"
+          ? { blob: null, notes: ["audio has no picture"] }
+          : {
+              blob: null,
+              notes: [
+                "play: metadata 1920×1080, play() ok, no frame ready (timed out waiting for loadeddata)",
+              ],
+            },
+      ),
+    });
+    const r = await ingestFiles(
+      [file("IMG_1.MOV", "video/quicktime"), file("voice.m4a", "audio/mp4")],
+      d,
+    );
+    expect(r.failed).toEqual([]);
+    expect(r.assets).toHaveLength(2);
+    expect(stored.has("media-2:poster")).toBe(false);
+    expect(r.warnings).toHaveLength(1); // none for audio
+    expect(r.warnings[0].name).toBe("IMG_1.MOV");
+    expect(r.warnings[0].message).toContain("timed out waiting for loadeddata");
+    expect(r.warnings[0].message).toContain("Create thumbnail");
+  });
+
+  it("a poster step that throws becomes a warning, not a failure", async () => {
+    const { d } = deps({
+      poster: vi.fn(async () => {
+        throw new Error("iOS refused");
+      }),
+    });
+    const r = await ingestFiles([file("a.mp4", "video/mp4")], d);
+    expect(r.failed).toEqual([]);
+    expect(r.warnings[0].message).toContain("iOS refused");
   });
 
   it("imported assets always form a valid project", async () => {
