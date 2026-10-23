@@ -388,7 +388,7 @@ Add to the right section below. Keep entries short, dated, and evidence-based. *
 **Finding:** multi-line JSX and long conditions defeat regex/single-line string replacement after a format pass (twice this phase an edit applied halfway and produced a syntax error that `tsc` caught). **Impact:** edit with anchored multi-line replacements and run `tsc` immediately after any scripted change.
 
 ### L-034 — iOS Safari and video thumbnails: what we know and what we don't   (2026-10-20 · iOS · evidence: owner's iPhone X, iOS 16; cause = hypothesis)
-**Observed (verified):** on iPhone X / iOS 16 the 1.2.0 poster maker returned nothing for an `.mp4`, while the metadata (duration) read fine and the import succeeded. The same code worked in Chromium. **Hypothesis (not proven):** iOS ignores `preload="auto"` for a video nobody asked to play, may not paint frames for a detached element, and a seek needs decoded data. **Remedy built (1.2.1):** attach an invisible muted `playsinline` element, `play()` briefly, pause, seek, wait for a presented frame, draw; distrust blank pictures; fall back to seek-only; browser-native first-frame fallback; user-triggered retry with notes. **Impact:** the unit tests encode the *hypothesis* (an iOS-like fake that only loads frames after `play()`); only the phone can confirm it. Keep the notes — they are the instrument.
+**UPDATE (1.2.1, verified by the owner on a real iPhone and on Android): the fix works — thumbnails now appear.** **Observed (verified):** on iPhone X / iOS 16 the 1.2.0 poster maker returned nothing for an `.mp4`, while the metadata (duration) read fine and the import succeeded. The same code worked in Chromium. **Hypothesis (not proven):** iOS ignores `preload="auto"` for a video nobody asked to play, may not paint frames for a detached element, and a seek needs decoded data. **Remedy built (1.2.1):** attach an invisible muted `playsinline` element, `play()` briefly, pause, seek, wait for a presented frame, draw; distrust blank pictures; fall back to seek-only; browser-native first-frame fallback; user-triggered retry with notes. **Impact:** the unit tests encode the *hypothesis* (an iOS-like fake that only loads frames after `play()`); only the phone can confirm it. Keep the notes — they are the instrument.
 
 ### L-035 — When you can't test a platform, make the product its own test rig   (2026-10-20 · process)
 **Finding:** with an owner who has one iPhone and an assistant with none, the fastest loop is: failure → *visible reason in the UI* → owner screenshots it → targeted fix. So import warnings carry the step trail and ⋯ → Create thumbnail shows it on failure. **Impact:** any feature that depends on a browser quirk should ship with a user-visible "why it failed" path, not just a console log (an iPhone has no console).
@@ -398,6 +398,18 @@ Add to the right section below. Keep entries short, dated, and evidence-based. *
 
 ### L-037 — Simulate the quirk, don't just mock the success   (2026-10-20 · testing)
 **Finding:** a scriptable `FakeVideo` (events fire only after `play()`; `play()` refused; never loads; no picture size) found two real design flaws before they shipped — the black-canvas problem above and wrong error descriptions. A test that documents the *old* behaviour ("the old approach would have failed on the iOS-like video") keeps the reason for the design visible.
+
+### L-038 — One sprite beats many images for a filmstrip   (2026-10-20 · performance/design · verified)
+**Finding:** a timeline clip can have dozens of cells; giving each its own image/object URL would mean dozens of decodes and blobs. One sprite (≤24 frames, ≤2048 px wide for iOS canvas limits) is a single decode and a single URL; each cell is just CSS `background-size`/`background-position`. The maths (`cellStyle`) is pure and has a test that no cell can show a neighbouring frame. Sample the **middle** of equal slices so a cell's frame is the one at its centre.
+
+### L-039 — Every derived blob needs a sweep rule   (2026-10-20 · storage · verified)
+**Finding:** adding `${mediaId}:strip` meant adding it to `mediaKeysOfAsset` and `rawMediaKeys`; otherwise the orphan sweep (which deletes anything unreferenced after 10 minutes) would have silently deleted every filmstrip. Tests assert the strip is kept for referenced videos and removed for orphans. **Rule:** any new derived media key ⇒ update both functions and the sweep tests *in the same change*.
+
+### L-040 — Build expensive derived media lazily, serially, once, and fail soft   (2026-10-20 · robustness)
+**Finding:** filmstrips are built the first time a clip is shown (so old imports get them too), one video at a time (phones decode one comfortably), never repeated in a page load, and a failure leaves the older, simpler picture in place and logs why. **Impact:** use `requestFilmstrip`'s shape for future derived data (proxies, waveforms for video, scene cuts).
+
+### L-041 — A one-off flaky test is a note, not a shrug   (2026-10-20 · testing)
+**Finding:** the App smoke test failed once under load and then passed 9 times in a row. It's recorded as N24 so a second occurrence is recognised as a pattern; changing the test to be more tolerant without understanding it would have hidden a possible real race.
 
 ---
 
@@ -442,6 +454,7 @@ Add to the right section below. Keep entries short, dated, and evidence-based. *
 | **Quarantine** | Setting aside an unreadable saved project (never deleting it) before replacing it. |
 | **TimeScale** | The single object that converts frames ⇄ pixels for the ruler, clips and playhead. |
 | **Poster** | A small JPEG still of a photo/video, stored beside the file and used for tiles, the player and the timeline filmstrip. |
+| **Filmstrip / sprite** | One image holding ~20 frames of a video; each timeline cell shows the frame for its own moment by offsetting into it. |
 | **Peaks** | A ≤120-number summary of an audio file's loudness over time, used to draw its waveform. |
 | **Stored asset** | An imported file kept in the app's media store (`source.type === "stored"`). |
 | **Orphan** | A stored file that no project (including quarantined ones) references any more. |

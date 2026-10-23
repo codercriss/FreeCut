@@ -7,6 +7,7 @@ import { quarantineRaw, saveProject } from "../storage/projectRepo";
 import {
   deleteMedia,
   getMedia,
+  getMediaRecord,
   isQuotaError,
   listMediaIds,
   mediaKeysOfAsset,
@@ -91,14 +92,28 @@ describe("database upgrade v1 → v2 (a real user's phone already has a v1 datab
   });
 });
 
+describe("records with metadata (filmstrip layout)", () => {
+  it("round-trips structured meta beside the blob; plain records have none", async () => {
+    const meta = { count: 20, cols: 11, rows: 2, cellW: 171, cellH: 96, durationSec: 19.85 };
+    await putMedia("m1:strip", blob("sprite", "image/jpeg"), Date.now(), meta);
+    await putMedia("m1:poster", blob("poster", "image/jpeg"));
+    const strip = await getMediaRecord("m1:strip");
+    expect(strip!.meta).toEqual(meta);
+    expect(await strip!.blob.text()).toBe("sprite");
+    expect((await getMediaRecord("m1:poster"))!.meta).toBeUndefined();
+    expect(await getMediaRecord("nope")).toBeUndefined();
+  });
+});
+
 describe("keys", () => {
-  it("an imported asset needs its file and its poster; demo assets need nothing", () => {
-    expect(mediaKeysOfAsset(stored("a", "m1"))).toEqual(["m1", "m1:poster"]);
+  it("an imported asset needs its file, its poster and its filmstrip; demo assets need nothing", () => {
+    expect(mediaKeysOfAsset(stored("a", "m1"))).toEqual(["m1", "m1:poster", "m1:strip"]);
     expect(mediaKeysOfAsset(createSampleProject(1).assets[0])).toEqual([]);
     expect(posterIdOf("m9")).toBe("m9:poster");
     expect([...referencedMediaKeys(withAssets([stored("a", "m1")]))].sort()).toEqual([
       "m1",
       "m1:poster",
+      "m1:strip",
     ]);
   });
   it("rawMediaKeys is tolerant of junk", () => {
@@ -114,7 +129,7 @@ describe("keys", () => {
         clips: "garbage",
         assets: [{ source: { type: "stored", mediaId: "z" } }],
       }),
-    ).toEqual(["z", "z:poster"]);
+    ).toEqual(["z", "z:poster", "z:strip"]);
   });
   it("recognises storage-full errors", () => {
     expect(isQuotaError(new DOMException("full", "QuotaExceededError"))).toBe(true);
@@ -131,8 +146,10 @@ describe("sweepOrphanMedia — must never delete anything still needed", () => {
     await putMedia("keep:poster", blob("2"), OLD);
     await putMedia("orphan", blob("3"), OLD);
     await putMedia("orphan:poster", blob("4"), OLD);
-    expect(await sweepOrphanMedia()).toBe(2);
-    expect((await listMediaIds()).sort()).toEqual(["keep", "keep:poster"]);
+    await putMedia("keep:strip", blob("5"), OLD); // the filmstrip sprite is protected too
+    await putMedia("orphan:strip", blob("6"), OLD);
+    expect(await sweepOrphanMedia()).toBe(3);
+    expect((await listMediaIds()).sort()).toEqual(["keep", "keep:poster", "keep:strip"]);
   });
   it("never deletes a fresh record (an import stores the blob before the project references it)", async () => {
     await putMedia("importing-now", blob("1"));

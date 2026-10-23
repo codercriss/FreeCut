@@ -309,3 +309,86 @@ test("no thumbnail? the browser's own first frame fills in, and Create thumbnail
   await loaded(t.locator("img.ve-art"));
   await expect(t.locator("video.ve-art-raw")).toHaveCount(0);
 });
+
+test("the timeline filmstrip shows DIFFERENT frames of the real video (not one picture repeated)", async ({
+  page,
+  isMobile,
+}) => {
+  await openLibrary(page, !!isMobile);
+  await importFiles(page, [fx("clip8.webm")]); // 8 s: testsrc2 has a running clock, so every second looks different
+  await expect(toast(page)).toContainText("Added 1 file");
+  await page.getByRole("button", { name: "Add clip8.webm to timeline" }).click();
+
+  // the sprite is built in the background the first time the clip shows on the timeline
+  const cells = page.locator('.ve-vclip:not([data-clip-id="clip-main"]) .ve-frame.strip');
+  await expect.poll(() => cells.count(), { timeout: 40_000 }).toBeGreaterThan(2);
+
+  // each cell points at a different frame of the source, in time order
+  const frames = (await cells.evaluateAll((els) =>
+    els.map((e) => Number((e as HTMLElement).dataset.frame)),
+  )) as number[];
+  expect(new Set(frames).size).toBe(frames.length);
+  expect(frames).toEqual([...frames].sort((a, b) => a - b));
+
+  // …and the stored sprite really contains different pictures: compare the first and last frame's pixels
+  const different = await page.evaluate(
+    () =>
+      new Promise<{ count: number; changed: number }>((resolve, reject) => {
+        const open = indexedDB.open("freecut");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const req = open.result.transaction("media").objectStore("media").getAll();
+          req.onsuccess = async () => {
+            const rec = (
+              req.result as Array<{
+                id: string;
+                blob: Blob;
+                meta?: { count: number; cols: number; cellW: number; cellH: number };
+              }>
+            ).find((r) => r.id.endsWith(":strip"));
+            if (!rec?.meta) return reject(new Error("no strip record"));
+            const bmp = await createImageBitmap(rec.blob);
+            const { count, cols, cellW, cellH } = rec.meta;
+            const read = (i: number) => {
+              const c = document.createElement("canvas");
+              c.width = cellW;
+              c.height = cellH;
+              const ctx = c.getContext("2d")!;
+              ctx.drawImage(
+                bmp,
+                (i % cols) * cellW,
+                Math.floor(i / cols) * cellH,
+                cellW,
+                cellH,
+                0,
+                0,
+                cellW,
+                cellH,
+              );
+              return ctx.getImageData(0, 0, cellW, cellH).data;
+            };
+            const a = read(0);
+            const b = read(count - 1);
+            let changed = 0;
+            for (let i = 0; i < a.length; i += 4)
+              if (
+                Math.abs(a[i] - b[i]) +
+                  Math.abs(a[i + 1] - b[i + 1]) +
+                  Math.abs(a[i + 2] - b[i + 2]) >
+                60
+              )
+                changed++;
+            resolve({ count, changed });
+          };
+        };
+      }),
+  );
+  expect(different.count).toBe(8);
+  expect(different.changed).toBeGreaterThan(300); // a clearly different picture, not noise
+
+  // it survives a reload (stored beside the video), and the clip draws from it again
+  await saved(page);
+  await page.reload();
+  await openEditor(page, !!isMobile);
+  await expect.poll(() => cells.count(), { timeout: 20_000 }).toBeGreaterThan(2);
+});

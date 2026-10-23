@@ -12,6 +12,10 @@ const cache = new Map<string, Entry>();
 /** Bumped by `refreshMedia` so every component showing that media re-reads it. */
 const versions = createStore<Record<string, number>>({});
 
+/** Changes whenever `refreshMedia(id)` is called — lets other hooks re-read data stored beside the blob. */
+export const useMediaVersion = (id: string | null): number =>
+  useStore(versions, (v) => (id ? (v[id] ?? 0) : 0));
+
 /** Call after (re)writing a media record (e.g. a thumbnail created later) so the UI picks it up. */
 export function refreshMedia(id: string): void {
   const old = cache.get(id);

@@ -2253,3 +2253,9 @@
   object-fit: cover;
   pointer-events: none;
 }
+
+/* Phase 1a.2: real filmstrip cells (one sprite image, a different frame per cell) */
+.ve-frame.strip {
+  background-repeat: no-repeat;
+  background-color: #0e5560;
+}

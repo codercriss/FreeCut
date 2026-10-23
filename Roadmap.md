@@ -157,12 +157,12 @@ Each phase lists **scope**, **new capabilities beyond what the UI currently sugg
 
 **Done:** file picker + desktop drag-and-drop · classification by MIME/extension (incl. iPhone `.MOV`/`.HEIC`) · probing with the browser's decoders (duration, size; audio-only "video" detected) · posters for photos/videos · waveform summary for audio · media stored as IndexedDB Blobs with a quota-aware, cleanup-on-failure ingest · one-undo-step batches · library with real thumbnails, durations, type filter, rename, delete-with-its-clips (undoable) · **+** add to timeline (photos default to 5 s) · import progress/result toast with per-file reasons · iPhone "add to Home Screen" tip · orphan sweep · **schema v2 + a real v1→v2 migration** · research **R-002** (IndexedDB chosen over OPFS) · **editor opens paused** (K2) which also made imports ~2× faster in tests.
 
-**Not done in 1a** (deliberately): real playback of video/audio (1b); per-frame filmstrip thumbnails (1b); search/sort and duplicate detection (1c); relink missing files (1c); proxies for heavy files and a storage-usage screen (1c); Home "Import media" opens the sheet but can't open the file picker itself (needs a tap — platform rule); folder import; paste import; HEIC fallback conversion where the browser can't decode it; waveform for video files.
+**Not done in 1a** (deliberately): real playback of video/audio (1b); the player following the playhead (1b); a finer filmstrip when zoomed far in; search/sort and duplicate detection (1c); relink missing files (1c); proxies for heavy files and a storage-usage screen (1c); Home "Import media" opens the sheet but can't open the file picker itself (needs a tap — platform rule); folder import; paste import; HEIC fallback conversion where the browser can't decode it; waveform for video files.
 
 **Acceptance (met in Chromium; iPhone verification = your 1a review):** import a video, a photo and an audio file → correct tiles, durations, waveform; bad/unsupported files explained without blocking the rest; add to timeline; close and reopen → everything is still there; upgrading a real Phase 0 database loses nothing.
 
 #### 1b — Preview & audio *(next)*
-- **Preview:** audio-driven master clock (K3), real frame display (WebCodecs with `HTMLVideoElement` fallback) composited on a WebGL2 canvas, frame-accurate seek/scrub, per-frame thumbnails (K4), "Original" toggle, fit/fill, fullscreen.
+- **Preview:** audio-driven master clock (K3), real frame display (WebCodecs with `HTMLVideoElement` fallback) composited on a WebGL2 canvas, frame-accurate seek/scrub, a finer-grained filmstrip when zoomed in (basic per-moment filmstrips shipped in 1a.2), "Original" toggle, fit/fill, fullscreen.
 - **Audio playback** via Web Audio with the audio clock as master; live level meter from a real `AnalyserNode`; honour track mute.
 - **Research R-001/R-004/R-005 first**, on iPhone Safari specifically (WebCodecs availability, texture upload cost, `AudioContext` start rules).
 - **Acceptance:** play an imported video with sound in sync (≤ 1 frame drift over 60 s), scrub smoothly, on **iPhone Safari and Chrome**.
@@ -384,7 +384,8 @@ Updated at the end of each phase delivery.
 | Baseline v1.0.0 | ✔ received & analysed | 2026-10-16 | Docs added (`freecut-baseline-docs.zip`). No code changed. |
 | **0** | ✔ **delivered & reviewed on iPhone Safari — all steps passed** | 2026-10-16 | `freecut-phase-0.zip`, v1.1.0 |
 | **1a** | ✔ **delivered — awaiting your review** | 2026-10-20 | `freecut-phase-1a.zip` (+ `freecut-phase-1a-changes.zip`), v1.2.0. Phone review script: `Handover.md §10` |
-| **1a.1** | ✔ **delivered — needs your iPhone retest** | 2026-10-20 | v1.2.1: iPhone video-thumbnail fix + fallbacks + diagnostics (`Handover.md §10`, R1–R7) |
+| **1a.1** | ✔ **delivered and confirmed on a real iPhone (and Android)** | 2026-10-20 | v1.2.1: video thumbnails now work |
+| **1a.2** | ✔ **delivered — needs your retest** | 2026-10-20 | v1.2.2: real per-moment timeline filmstrips (`Handover.md §10`, F1–F8) |
 | 1b | ☐ next (after the retest) | — | preview & audio |
 | 1c | ☐ | — | projects & heavy files |
 | 2 | ☐ | — | |

@@ -13,18 +13,36 @@ export interface MediaRecord {
   bytes: number;
   /** Epoch ms when stored — the orphan sweep never touches fresh records. */
   at: number;
+  /** Small structured data that belongs with the blob (e.g. the layout of a filmstrip sprite). */
+  meta?: unknown;
 }
 
 export const posterIdOf = (mediaId: string): string => `${mediaId}:poster`;
+/** The filmstrip sprite (many frames in one image) for a video. */
+export const stripIdOf = (mediaId: string): string => `${mediaId}:strip`;
 
-export async function putMedia(id: string, blob: Blob, now: number = Date.now()): Promise<void> {
-  const rec: MediaRecord = { id, blob, mime: blob.type, bytes: blob.size, at: now };
+export async function putMedia(
+  id: string,
+  blob: Blob,
+  now: number = Date.now(),
+  meta?: unknown,
+): Promise<void> {
+  const rec: MediaRecord = {
+    id,
+    blob,
+    mime: blob.type,
+    bytes: blob.size,
+    at: now,
+    ...(meta === undefined ? {} : { meta }),
+  };
   await idbPut("media", rec);
 }
 
 export async function getMedia(id: string): Promise<Blob | undefined> {
   return (await idbGet<MediaRecord>("media", id))?.blob;
 }
+
+export const getMediaRecord = (id: string) => idbGet<MediaRecord>("media", id);
 
 export const deleteMedia = (id: string) => idbDelete("media", id);
 
@@ -65,7 +83,9 @@ export async function storageEstimate(): Promise<{ usage: number; quota: number 
 
 /** Every media key an asset needs (the file and its poster). */
 export function mediaKeysOfAsset(a: Asset): string[] {
-  return a.source.type === "stored" ? [a.source.mediaId, posterIdOf(a.source.mediaId)] : [];
+  return a.source.type === "stored"
+    ? [a.source.mediaId, posterIdOf(a.source.mediaId), stripIdOf(a.source.mediaId)]
+    : [];
 }
 
 export function referencedMediaKeys(p: Project): Set<string> {
@@ -84,7 +104,7 @@ export function rawMediaKeys(raw: unknown): string[] {
   for (const a of assets) {
     const src = (a as { source?: { type?: unknown; mediaId?: unknown } } | null)?.source;
     if (src && src.type === "stored" && typeof src.mediaId === "string")
-      out.push(src.mediaId, posterIdOf(src.mediaId));
+      out.push(src.mediaId, posterIdOf(src.mediaId), stripIdOf(src.mediaId));
   }
   return out;
 }

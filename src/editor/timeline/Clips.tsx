@@ -2,6 +2,8 @@ import { SlidersHorizontal, Sparkles } from "lucide-react";
 import { mmss, hhmmss } from "../../model/time";
 import type { Asset, Clip } from "../../model/types";
 import { IconFilters } from "../../ui/icons";
+import { cellStyle, frameIndexAt } from "../../media/filmstrip";
+import { useFilmstrip } from "../../media/useFilmstrip";
 import { usePosterUrl } from "../../media/useMediaUrl";
 import { lcg } from "../../util/random";
 import { Scene } from "../footage/scenes";
@@ -91,6 +93,7 @@ export function VideoClip({
   const frames = Math.min(90, Math.max(1, Math.round(width / 41.6)));
   const scene = asset.source.type === "generated" ? asset.source.thumb || asset.source.scene : null;
   const poster = usePosterUrl(asset);
+  const strip = useFilmstrip(asset, fps);
   return (
     <div
       className={`ve-clip ve-vclip${selected ? " sel" : ""}`}
@@ -123,15 +126,34 @@ export function VideoClip({
         <span className="ve-chip">{hhmmss(clip.duration, fps)}</span>
       </div>
       <div className="ve-film">
-        {Array.from({ length: frames }, (_, i) => (
-          <div
-            className={`ve-frame${poster ? " poster" : ""}`}
-            key={i}
-            style={poster ? { backgroundImage: `url("${poster}")` } : undefined}
-          >
-            {scene && <Scene id={scene} />}
-          </div>
-        ))}
+        {Array.from({ length: frames }, (_, i) => {
+          if (strip) {
+            // Each cell shows the frame for ITS moment of the source (accounting for trim and speed).
+            const cellW = (width - 2 - (frames - 1)) / frames; // .ve-film: 1 px padding, 1 px gaps
+            const t = (clip.sourceIn + ((i + 0.5) / frames) * clip.duration * clip.speed) / fps;
+            const idx = frameIndexAt(t, strip.meta);
+            return (
+              <div
+                className="ve-frame strip"
+                key={i}
+                data-frame={idx}
+                style={{
+                  backgroundImage: `url("${strip.url}")`,
+                  ...cellStyle(strip.meta, idx, cellW, 40),
+                }}
+              />
+            );
+          }
+          return (
+            <div
+              className={`ve-frame${poster ? " poster" : ""}`}
+              key={i}
+              style={poster ? { backgroundImage: `url("${poster}")` } : undefined}
+            >
+              {scene && <Scene id={scene} />}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

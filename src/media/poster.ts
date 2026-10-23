@@ -69,7 +69,7 @@ const errName = (e: unknown): string =>
       ? e.message || e.name
       : String(e);
 
-function waitForEvent(v: VideoLike, events: string[], ms: number): Promise<string> {
+export function waitForEvent(v: VideoLike, events: string[], ms: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const hooks: Array<[string, () => void]> = [];
     const cleanup = () => hooks.forEach(([e, f]) => v.removeEventListener(e, f));
@@ -97,7 +97,7 @@ function waitForEvent(v: VideoLike, events: string[], ms: number): Promise<strin
 }
 
 /** Wait until the browser has presented a frame (or a short moment, where it can't tell us). */
-async function presentedFrame(v: VideoLike): Promise<void> {
+export async function presentedFrame(v: VideoLike): Promise<void> {
   if (typeof v.requestVideoFrameCallback === "function") {
     await Promise.race([
       new Promise<void>((r) => v.requestVideoFrameCallback!(() => r())),
