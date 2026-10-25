@@ -392,3 +392,91 @@ test("the timeline filmstrip shows DIFFERENT frames of the real video (not one p
   await openEditor(page, !!isMobile);
   await expect.poll(() => cells.count(), { timeout: 20_000 }).toBeGreaterThan(2);
 });
+
+/** Put the playhead on a timeline frame (desktop: click the scrub bar; phone: scroll the timeline). */
+async function seekToFrame(page: Page, isMobile: boolean, frame: number, totalFrames: number) {
+  if (isMobile) {
+    await page
+      .locator(".ve-mob-scroll")
+      .evaluate((el, x) => void (el.scrollLeft = x), (frame / 60) * 28);
+  } else {
+    const box = (await page.locator(".ve-scrub").boundingBox())!;
+    await page.mouse.click(box.x + box.width * (frame / totalFrames), box.y + box.height / 2);
+  }
+}
+
+test("quality: the player shows the ORIGINAL photo, not the small preview", async ({
+  page,
+  isMobile,
+}) => {
+  await openLibrary(page, !!isMobile);
+  await importFiles(page, [fx("big.png")]); // 1600×900
+  await expect(toast(page)).toContainText("Added 1 file");
+  await page.getByRole("button", { name: "Add big.png to timeline" }).click();
+  if (isMobile) await page.getByRole("button", { name: "Done" }).click();
+  await seekToFrame(page, !!isMobile, 1678 + 150, 1678 + 300); // inside the photo's 5 s
+
+  const stage = page.locator(".ve-video img.ve-stage-img");
+  await expect(stage).toHaveCount(2); // [0] the small poster underneath, [1] the original on top
+  await expect
+    .poll(() => stage.nth(1).evaluate((i: HTMLImageElement) => (i.complete ? i.naturalWidth : 0)))
+    .toBe(1600);
+  expect(await stage.nth(0).evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeLessThanOrEqual(
+    512,
+  ); // the placeholder
+  await expect
+    .poll(() => stage.nth(1).evaluate((i: HTMLImageElement) => getComputedStyle(i).opacity))
+    .toBe("1");
+});
+
+test("quality: the player shows a real full-resolution video frame that follows the playhead", async ({
+  page,
+  isMobile,
+}) => {
+  await openLibrary(page, !!isMobile);
+  await importFiles(page, [fx("clip8.webm")]);
+  await expect(toast(page)).toContainText("Added 1 file");
+  await page.getByRole("button", { name: "Add clip8.webm to timeline" }).click();
+  if (isMobile) await page.getByRole("button", { name: "Done" }).click();
+  const total = 1678 + 480;
+
+  const video = page.locator("video.ve-stage-vid");
+  const grab = () =>
+    video.evaluate((v: HTMLVideoElement) => {
+      const c = document.createElement("canvas");
+      c.width = 32;
+      c.height = 18;
+      const ctx = c.getContext("2d")!;
+      ctx.drawImage(v, 0, 0, 32, 18);
+      return {
+        t: v.currentTime,
+        vw: v.videoWidth,
+        pixels: Array.from(ctx.getImageData(0, 0, 32, 18).data),
+      };
+    });
+
+  await seekToFrame(page, !!isMobile, 1678 + 60, total); // 1 s into the clip
+  await expect.poll(async () => (await grab()).t, { timeout: 20_000 }).toBeGreaterThan(0.7);
+  await expect
+    .poll(() => video.evaluate((v: HTMLVideoElement) => getComputedStyle(v).opacity))
+    .toBe("1"); // verified, so shown
+  const first = await grab();
+  expect(first.t).toBeLessThan(1.4);
+  expect(first.vw).toBe(320); // the real video, not a thumbnail
+
+  await seekToFrame(page, !!isMobile, 1678 + 360, total); // 6 s into the clip
+  await expect.poll(async () => (await grab()).t, { timeout: 20_000 }).toBeGreaterThan(5.6);
+  const second = await grab();
+  expect(second.t).toBeLessThan(6.4);
+  let changed = 0;
+  for (let i = 0; i < first.pixels.length; i += 4) {
+    if (
+      Math.abs(first.pixels[i] - second.pixels[i]) +
+        Math.abs(first.pixels[i + 1] - second.pixels[i + 1]) +
+        Math.abs(first.pixels[i + 2] - second.pixels[i + 2]) >
+      60
+    )
+      changed++;
+  }
+  expect(changed).toBeGreaterThan(40); // clearly a different picture at 6 s than at 1 s
+});

@@ -5,10 +5,10 @@
 | | |
 |---|---|
 | **Project** | FreeCut — browser-based video editor (PWA), aiming to be a free CapCut alternative |
-| **Version** | **v1.2.2** — Phase 1a **patch 2: real timeline filmstrips** (1.2.1 = iPhone thumbnail fix · 1.2.0 = media import & library) |
-| **Delivered** | 2026-10-20 · `freecut-phase-1a-2.zip` (full) and `freecut-phase-1a-2-changes.zip` (only what changed since 1.2.1 — see `CHANGES.md`) |
-| **Status** | **Confirmed on your iPhone (and Android): thumbnails now work** (your screenshot). Timeline filmstrips are new in this patch — *needs your retest* (§10 top). Phase 0 passed all steps |
-| **Next** | Once the filmstrip is confirmed on your phones: Phase 1b — real preview & audio playback (research on iPhone Safari first), then 1c, Phase 2, thin export |
+| **Version** | **v1.2.3** — Phase 1a **patch 3: full-quality player** (1.2.2 = real filmstrips · 1.2.1 = iPhone thumbnail fix · 1.2.0 = media import & library) |
+| **Delivered** | 2026-10-20 · `freecut-phase-1a-3.zip` (full) and `freecut-phase-1a-3-changes.zip` (only what changed since 1.2.2 — see `CHANGES.md`) |
+| **Status** | Filmstrips confirmed working by you. This patch fixes the **blurry imported photo/video in the player**; *needs your retest* (§10 top). Phase 0 passed all steps |
+| **Next** | Once the quality is confirmed on your phones: Phase 1b — real playback with sound (research on iPhone Safari first), then 1c, Phase 2, thin export |
 
 ---
 
@@ -19,6 +19,10 @@ FreeCut is now an editor you can put **your own media** into. You can import vid
 **What your iPhone X (iOS 16) showed, and what 1.2.1 does about it.** The video imported, was stored and landed on the timeline — but its thumbnail was a grey film icon and the player stayed black, and the duration read 00:17 where you expected about 0:13 (see N21). I couldn't reproduce the thumbnail problem here (my test browser behaves differently from iOS Safari), so 1.2.1 attacks it three ways: **(1)** a rewritten thumbnail maker built around how iOS is known to behave (attach an invisible muted video to the page, briefly *play* it so a frame is really decoded, then pause, seek and draw; distrust blank pictures; fall back to plain seeking) — tested against simulated iOS-style behaviour, but **unproven on a real iPhone**; **(2)** fallbacks when no picture can be made — the browser's own first frame is shown in the tile and the player; **(3)** diagnostics — the import box now says *why* a picture failed, and **⋯ → Create thumbnail** retries on demand and shows the step-by-step reason (screenshot it for me). Whichever way it goes, your phone will tell us exactly what iOS 16 does.
 
 **Update (1.2.2) — your latest screenshot.** The thumbnail fix worked on your iPhone (and Android): the player now shows the real picture. You then spotted the next gap: every cell of the timeline clip repeated that *same* picture. 1.2.2 fixes it properly: the first time an imported video appears on the timeline, FreeCut builds a **filmstrip sprite** — one small image holding about 20 frames spread across the clip, built one video at a time with the same iOS-proofed approach as the thumbnail — and each timeline cell then shows the frame for *its own moment* (respecting trim and speed). It's stored beside the video, survives reloads, and if it can't be built the timeline simply keeps the single picture. The **player is still a single still image** — real moving preview and sound are Phase 1b.
+
+**Update (1.2.3) — "the quality of an imported video or image is reduced".** Your original files were never touched (they are stored byte for byte, and the future export will use them). The softness was the **player**, which showed the small preview picture (a 320 px thumbnail) stretched to fill the screen. Now: **photos** show the original file; **videos** show a real, full-resolution frame from the original video that **follows the playhead** (silent for now); the small preview stays underneath as a safety net and is only covered once the real picture is verified. Library thumbnails (320 → 512 px, better JPEG quality) and filmstrip cells (96 → 128 px) are sharper too — for *new* imports; existing ones keep their old size (N29).
+
+**Working agreement added:** every update ends with **one plain commit message in the chat** (never in a file), written for you to paste.
 
 ---
 
@@ -38,9 +42,9 @@ npm run e2e            # Playwright (see below)
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
 | `npm run typecheck`                                          | `tsc` on `src` (browser) and on config/e2e (Node)                                                 |
 | `npm run lint` · `npm run format:check` · `npm run format`   | ESLint 9 (flat config) · Prettier                                                                 |
-| `npm test` · `npm run test:watch` | Vitest — 299 tests, 33 files |
+| `npm test` · `npm run test:watch` | Vitest — 315 tests, 34 files |
 | `npm run build`                                              | typecheck + `vite build` (+ PWA service worker)                                                   |
-| `npm run e2e` | Playwright: Chromium + WebKit, desktop + phone (23 specs × 4 projects). First: `npx playwright install chromium webkit` |
+| `npm run e2e` | Playwright: Chromium + WebKit, desktop + phone (25 specs × 4 projects). First: `npx playwright install chromium webkit` |
 
 **Deploy:** Vercel (`vercel.json` unchanged). CI: `.github/workflows/ci.yml` (verify job + e2e on Chromium and WebKit).
 
@@ -49,7 +53,7 @@ npm run e2e            # Playwright (see below)
 | Check | Result |
 | --- | --- |
 | `npm run typecheck` · `npm run lint` · `npm run format:check` | ✔ clean |
-| `npm test` | ✔ **299 passed** (33 files) — 156 at Phase 0, 246 at 1.2.0, 272 at 1.2.1 |
+| `npm test` | ✔ **315 passed** (34 files) — 156 at Phase 0, 246 at 1.2.0, 272 at 1.2.1, 299 at 1.2.2 |
 | `npm run build` | ✔ initial JS **202.8 kB / 64.2 kB gzip** + CSS 17.6 kB; lazy editor chunk 69.3 kB / 20.2 kB gzip + CSS 29.5 kB; PWA precache 18 entries / 344 KiB |
 | Playwright, **Chromium** desktop + phone | ✔ see the final run recorded in §2b below |
 | Playwright, **WebKit (Safari)** | ⚠ **configured, NOT run by me** (no WebKit here). GitHub Actions runs it once the CI file is in your repo — please check the Actions tab |
@@ -94,6 +98,19 @@ Run on 2026-10-20 against a clean extraction of `freecut-phase-1a-2.zip` (`npm c
 | `webkit-*` | ⚠ not run here — CI only |
 
 Not proven by any of this: how long the filmstrip takes on **your phones** for a long video (F2, F5) and that iOS builds it correctly — it uses the same approach that fixed the thumbnail, but only your retest can confirm.
+
+#### 2e. Patch 1.2.3 run (from the extracted zip)
+
+Run on 2026-10-20 against a clean extraction of `freecut-phase-1a-3.zip` (`npm ci` → `npm run verify` → Playwright):
+
+| Project | Result |
+|---|---|
+| `npm run verify` | ✔ typecheck, lint, format, **315 tests**, build (initial JS 203.1 kB / 64.3 kB gzip; lazy editor chunk 81.0 kB / 24.3 kB gzip) |
+| `chromium-desktop` + `chromium-phone` | ✔ **45 passed, 5 skipped, 0 failed** (25 specs; the skips are intentional desktop-only / phone-only tests) |
+| New in this patch | *the player shows the ORIGINAL photo (a 1600 px image reports `naturalWidth` 1600 on top of the ≤512 px poster)* and *a real full-resolution video frame that follows the playhead* — checks `currentTime` tracks the playhead, the video is revealed, and compares pixels at 1 s vs 6 s (desktop + phone) |
+| `webkit-*` | ⚠ not run here — CI only |
+
+Not proven by any of this: how sharp and how smooth it is **on your phones**. The test video is only 320×240, so full-resolution decoding of *your* 1080p/4K clips is exactly what Q3–Q5 check.
 
 > **How the browser tests were run here:** a headless Chromium 153 obtained from the `@sparticuz/chromium` npm package, via `FREECUT_CHROMIUM=/tmp/chromium` (see `playwright.config.ts`) — not a stock Chrome install. On your machine/CI the standard `npx playwright install` is used.
 
@@ -244,7 +261,10 @@ freecut/
 | **N21** | **Duration check:** your phone showed **00:17** (17 s 57 f) for a clip you described as about 0:13. Either the clip really is ~18 s, or iOS reports a longer duration than the picture (e.g. a longer audio track) — please tell me the real length (Photos → the video). If they differ I'll investigate how the duration is read. |
 | N24 | **A flaky test seen once:** the App smoke test failed once under full-suite load right after a code change, then passed in 9 consecutive runs (alone and full). Not reproduced; if it appears again, capture the assertion and send it to me. |
 | N25 | **Filmstrip limits:** ~1 frame per second (max 24 per video), so zooming far in repeats frames; built lazily on first display, **one video at a time**, taking a few seconds on a phone; a long video may take longer. If it can't be built (reason is logged in the console) the timeline keeps the single poster. The sprite is small (tens of KB) and protected from the orphan sweep. |
-| N26 | The **player shows a still image** (the poster, or the browser's first frame) — it does not follow the playhead yet. That is Phase 1b. |
+| N27 | **Quality of the preview depends on the browser's decoder:** the video frame is drawn by the browser's own `<video>`; if it can't be verified as a real (non-blank) picture it stays hidden and the small poster remains visible. Very large photos (e.g. 48 MP) are decoded in full — heavy on older iPhones; if one fails to load you'll see the poster instead. |
+| N28 | While Play is on, the frame is re-seeked as fast as the phone allows (typically a few frames a second) — it will look like a slideshow, not smooth video, until Phase 1b. |
+| N29 | **Existing imports keep their old thumbnail/filmstrip size** (thumbnails 320 px, filmstrip cells 96 px). New imports are sharper. To refresh an old one: delete it from the library and re-import (undo-able until you reload). |
+| N26 | **Updated (1.2.3):** the player now shows a **real full-resolution frame that follows the playhead** (silent, one seek at a time). There is still **no sound and no real playing** — pressing Play moves the playhead and the picture catches up as the phone allows. Proper playback with audio is Phase 1b. |
 | N22 | Thumbnail creation now *plays the video muted for a split second* (inside an invisible 2 px element). It's silent and should be invisible; it exists because iOS may need it to decode a frame. |
 | N23 | When no poster exists, the player/tile use the browser's own `<video>` first frame (reads the file's blob; fine for short clips, to be reviewed for big files in 1c). |
 
@@ -283,6 +303,9 @@ Browser API support (WebCodecs, Web Audio start rules, texture upload) varies, *
 | D-024 | 2026-10-20 | Timeline filmstrip = **one sprite per video** (≤24 frames, ≤2048 px wide, ~96 px tall cells) + layout meta, stored as `${mediaId}:strip`; cells pick the frame for their own source time (trim/speed aware) | Done |
 | D-025 | 2026-10-20 | Filmstrips are built **lazily, one video at a time**, on first display; failure falls back to the poster and is logged | Done |
 | D-026 | 2026-10-20 | **Every derived media key must be listed in `mediaKeysOfAsset`/`rawMediaKeys`**, or the orphan sweep deletes it | Done (rule) |
+| D-027 | 2026-10-20 | The player shows the **original photo** and a **real full-resolution video frame** (native `<video>`, one seek in flight, follows the playhead); the small poster stays underneath and the video is revealed only after a non-blank frame is verified | Done |
+| D-028 | 2026-10-20 | Posters 512 px / JPEG 0.82; filmstrip cells 128 px tall (new imports) | Done |
+| D-029 | 2026-10-20 | **Every update ends with one plain-language commit message in the chat — never in a file** (owner's request) | Standing rule |
 
 ---
 
@@ -295,32 +318,33 @@ Browser API support (WebCodecs, Web Audio start rules, texture upload) varies, *
 | **1a — Media import & library** | **2026-10-20** | **`freecut-phase-1a.zip`** + `freecut-phase-1a-changes.zip` | §2 / §2b | K3 K4 K9 · N1 N3–N7 · N10–N20 |
 | **1a.1 — iPhone thumbnail patch** | **2026-10-20** | **`freecut-phase-1a-1.zip`** + `freecut-phase-1a-1-changes.zip` | §2c | N21 (✔ N10 resolved) |
 | **1a.2 — real filmstrips** | **2026-10-20** | **`freecut-phase-1a-2.zip`** + `freecut-phase-1a-2-changes.zip` | §2d | N21 N24–N26 |
+| **1a.3 — full-quality player** | **2026-10-20** | **`freecut-phase-1a-3.zip`** + `freecut-phase-1a-3-changes.zip` | §2e | N27–N29 |
 
 ---
 
 ## 9. Phase delivery & review protocol
 
 Unchanged: each phase ships the full zip (source only), updated docs, a **verification record**, a **review script**, and a **not-done list**. After review, send pass/fail per step, change requests labelled _blocking_ / _later_, answers to **[DECISION]** items, and real-device findings.
+**Commit message:** every delivery ends with **one plain-language commit message in the chat** (never in a file) — owner's request.
 **Zip hygiene:** no `node_modules/`, `dist/`, `dev-dist/`, `test-results/`, `playwright-report/`, `.vercel/`, `.env*.local`.
 
 ---
 
 ## 10. Phase 1a review script — **iPhone Safari first** (≈ 20 min)
 
-### Retest for 1.2.2 first (≈ 5 min) — the real filmstrip  *(thumbnails: ✔ confirmed by you)*
+### Retest for 1.2.3 first (≈ 5 min) — full-quality player  *(thumbnails ✔ and filmstrips ✔ confirmed by you)*
 
 | # | Do | Expect / tell me |
 |---|---|---|
-| F1 | **Me** tab | Shows **v1.2.2** (if not: fully close and reopen the tab/app twice) |
-| F2 | **New video** → look at your imported clip on the timeline | Within a few seconds of it appearing, the cells change from *one repeated picture* to **different frames** along the clip. **Tell me how long it took** |
-| F3 | Tap **+** (zoom in) on the timeline | More cells; frames still differ (with far zoom some neighbours repeat — expected) |
-| F4 | **Fully close** the app and reopen | The filmstrip is there **immediately** (it was saved) |
-| F5 | Import a **second, longer video** (1–2 min) and add it | Its filmstrip appears (may take longer). **Tell me roughly how many seconds**, and whether the app stayed smooth |
-| F6 | Trim/speed aren't editable yet, so just check: the **last cell** of a clip looks like the *end* of the video, the first like the *start* | ✔/✘ |
-| F7 | Same on **Android** | ✔/✘ + model |
-| F8 | If a filmstrip never appears, the clip just keeps one repeated picture — **tell me which video** (size, length, where it came from) | — |
+| Q1 | **Me** tab | Shows **v1.2.3** (if not: fully close and reopen the tab/app twice) |
+| Q2 | Add an imported **photo** to the timeline, put the playhead on it | The player shows it **sharp** (the original), not blurry. Compare with the photo in the Photos app. Tell me ✔/✘ and the photo's size (e.g. 12 MP) |
+| Q3 | Put the playhead inside your imported **video** | The picture is **sharp** (full resolution of your video). Tell me ✔/✘ |
+| Q4 | **Drag the timeline** back and forth over the video | The picture **changes to match the moment** (silently). **Tell me how smooth it feels** (instant / a short lag / very laggy) and your phone |
+| Q5 | Press **Play** | The playhead runs and the picture follows, like a slideshow (**no sound yet** — that is Phase 1b). Does anything crash, freeze or go black? |
+| Q6 | **New import:** import one more photo/video and look at its **library tile** and **timeline filmstrip** | Noticeably sharper than the older ones |
+| Q7 | A **very large photo** (≥ 24 MP) if you have one | Shows, or falls back to the small picture — **tell me which and how long it took** |
+| Q8 | If a video's picture ever stays **black or never appears** in the player | Tell me which video (size, length, where from). The small picture should still show underneath |
 
-Remember: the **player still shows a single still image** — it doesn't move with the playhead until Phase 1b.
 
 
 You need: the site open on your phone, a few **photos and videos in your Photos app** (a short 10–30 s clip is ideal, plus one longer clip if you have it), and an audio file in the **Files** app (a Voice Memo saved to Files, or any .m4a/.mp3).

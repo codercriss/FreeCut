@@ -72,7 +72,7 @@ Node ≥ 18.18.
 ## A4. Branches, commits, versions
 
 - Branch: `phase-N/short-topic` (e.g. `phase-2/ripple-delete`).
-- Commit style: `area: imperative summary` — e.g. `timeline: snap clip edges to playhead`. Body explains *why* and links the roadmap item.
+- **Commit messages:** the owner commits updates himself and asked for **one plain-language message per update, written by the assistant in the chat (not in a file)** — a short summary line anyone can read, e.g. "Show sharp originals in the player and fix blurry previews". For developers working in git, the style is `area: imperative summary` with a body that explains *why*.
 - Version: `package.json` bumps **minor** per phase (`1.1.0` after Phase 0, …) and **patch** for fixes within a phase. The zip is named `freecut-phase-N.zip`.
 - Project-file schema has its own `schemaVersion`; any change needs a **migration + a test with an old fixture** (Phase 0 onward).
 
@@ -410,6 +410,15 @@ Add to the right section below. Keep entries short, dated, and evidence-based. *
 
 ### L-041 — A one-off flaky test is a note, not a shrug   (2026-10-20 · testing)
 **Finding:** the App smoke test failed once under load and then passed 9 times in a row. It's recorded as N24 so a second occurrence is recognised as a pattern; changing the test to be more tolerant without understanding it would have hidden a possible real race.
+
+### L-042 — Never stretch a thumbnail as the main view   (2026-10-20 · quality · owner report, verified)
+**Finding:** the owner said imported media looked "reduced in quality". Originals were intact; the player was showing the 320 px poster scaled up. **Rule:** thumbnails are for lists; the main view uses the original (photo) or a real decoded frame (video). Keep the small picture *underneath* as a safety net and reveal the real one only when it has loaded / been verified — then a quirky decoder degrades to "slightly soft", never to "black".
+
+### L-043 — Chasing a moving target with one seek in flight   (2026-10-20 · performance · verified in tests)
+**Finding:** seeking a native video on every playhead change piles up work on phones. `StageVideo` allows one seek at a time; when it lands it jumps straight to the *latest* requested time (skipping the ones in between). A test drives rapid target changes and asserts exactly this. **Impact:** reuse the pattern for any "follow a changing value with something slow" problem.
+
+### L-044 — Owner's preference: one plain commit message per update   (2026-10-20 · process)
+**Rule:** end every delivery with a single plain-language commit message in the chat — a short summary line a non-developer can paste, never inside a file. (See `A4`.)
 
 ---
 

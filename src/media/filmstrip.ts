@@ -18,7 +18,7 @@ export interface StripMeta {
 }
 
 export const STRIP_MAX_FRAMES = 24;
-const CELL_H = 96;
+const CELL_H = 128;
 const MAX_SPRITE_W = 2048;
 
 /** How many frames to sample: about one a second, between 3 and 24. */
@@ -33,7 +33,7 @@ export function stripLayout(
   durationSec = 0,
 ): StripMeta {
   const cellH = CELL_H;
-  const cellW = Math.max(54, Math.min(192, Math.round((CELL_H * videoW) / Math.max(1, videoH))));
+  const cellW = Math.max(72, Math.min(256, Math.round((CELL_H * videoW) / Math.max(1, videoH))));
   const cols = Math.max(1, Math.min(count, Math.floor(MAX_SPRITE_W / cellW)));
   return { count, cols, rows: Math.ceil(count / cols), cellW, cellH, durationSec };
 }

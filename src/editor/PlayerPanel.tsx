@@ -1,54 +1,11 @@
 import { Maximize, Menu, Pause, Play } from "lucide-react";
 import { useRef, useState, type PointerEvent } from "react";
 import { usePlayback } from "../engine/playback";
-import { activeVisualClip, assetById } from "../model/selectors";
 import { timecode } from "../model/time";
-import type { Asset } from "../model/types";
-import { useMediaUrl, usePosterUrl } from "../media/useMediaUrl";
-import { useProject } from "../store/ProjectContext";
 import { IconFit } from "../ui/icons";
-import { Scene } from "./footage/scenes";
+import { Stage } from "./Stage";
 
-/** The asset showing under the playhead (topmost visual clip), or undefined for a gap / empty project. */
-export function useStageAsset(frame: number): Asset | undefined {
-  return useProject((p) => {
-    const clip = activeVisualClip(p, Math.max(0, frame));
-    return clip ? assetById(p, clip.assetId) : undefined;
-  });
-}
-
-/**
- * The picture area shared by the desktop and phone players. Demo assets draw their generated scene; imported
- * assets show their poster until the real decoder-backed preview arrives (Phase 1b).
- */
-export function Stage({ frame }: { frame: number }) {
-  const asset = useStageAsset(frame);
-  const poster = usePosterUrl(asset);
-  const scene = asset && asset.source.type === "generated" ? asset.source.scene : null;
-  // No poster could be made (some browsers refuse): let the browser's own player show the first frame.
-  const rawId =
-    asset && asset.source.type === "stored" && asset.kind === "video" && !poster
-      ? asset.source.mediaId
-      : null;
-  const rawUrl = useMediaUrl(rawId);
-  return (
-    <div className="ve-video">
-      {scene && <Scene id={scene} />}
-      {poster && <img className="ve-stage-img" src={poster} alt="" draggable={false} />}
-      {rawUrl && (
-        <video
-          className="ve-stage-img"
-          src={`${rawUrl}#t=0.1`}
-          muted
-          playsInline
-          preload="metadata"
-          aria-hidden="true"
-          tabIndex={-1}
-        />
-      )}
-    </div>
-  );
-}
+export { Stage } from "./Stage";
 
 /* ───────────── player ───────────── */
 export function PlayerPanel() {

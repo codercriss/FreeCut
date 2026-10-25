@@ -11,7 +11,7 @@ import { makeMediaElement, withTimeout } from "./probe";
 export type { PosterResult } from "./poster";
 
 /** `toBlob` normally returns in milliseconds, but a busy page can delay it; never let it hang an import. */
-const canvasToBlob = (c: HTMLCanvasElement, type = "image/jpeg", q = 0.72): Promise<Blob | null> =>
+const canvasToBlob = (c: HTMLCanvasElement, type = "image/jpeg", q = 0.82): Promise<Blob | null> =>
   withTimeout(
     new Promise<Blob | null>((resolve) => c.toBlob((b) => resolve(b), type, q)),
     8000,
@@ -91,7 +91,7 @@ const browserPosterEnv: PosterEnv = {
 export async function makePosterDetailed(
   file: Blob,
   probe: Pick<Probe, "kind" | "durationSec">,
-  maxSide = 320,
+  maxSide = 512,
   opts?: PosterOptions,
 ): Promise<PosterResult> {
   if (probe.kind === "audio") return { blob: null, notes: ["audio has no picture"] };

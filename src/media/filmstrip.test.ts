@@ -39,16 +39,16 @@ describe("stripCount / frameTimes / frameIndexAt", () => {
 describe("stripLayout", () => {
   it("keeps the video's aspect ratio and the sprite under 2048 px wide", () => {
     const m = stripLayout(24, 1920, 1080, 30);
-    expect(m.cellH).toBe(96);
-    expect(m.cellW).toBe(171);
+    expect(m.cellH).toBe(128);
+    expect(m.cellW).toBe(228);
     expect(m.cols * m.cellW).toBeLessThanOrEqual(2048);
     expect(m.cols * m.rows).toBeGreaterThanOrEqual(24);
     expect(m.durationSec).toBe(30);
   });
   it("portrait phone video gets narrow cells; extreme shapes are clamped", () => {
-    expect(stripLayout(10, 1080, 1920).cellW).toBe(54);
-    expect(stripLayout(10, 100, 1000).cellW).toBe(54);
-    expect(stripLayout(10, 5000, 100).cellW).toBe(192);
+    expect(stripLayout(10, 1080, 1920).cellW).toBe(72);
+    expect(stripLayout(10, 100, 1000).cellW).toBe(72);
+    expect(stripLayout(10, 5000, 100).cellW).toBe(256);
   });
   it("never has more columns than frames, and fits every frame", () => {
     const m = stripLayout(3, 1080, 1920);

@@ -2259,3 +2259,9 @@
   background-repeat: no-repeat;
   background-color: #0e5560;
 }
+
+/* Phase 1a.3: full-quality player (original photo / real video frame over the small poster) */
+.ve-stage-vid,
+.ve-stage-img {
+  background: #000;
+}
