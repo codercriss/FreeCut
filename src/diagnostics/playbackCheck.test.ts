@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Asset } from "../model/types";
 import {
+  analyzePlayback,
   browserName,
   findSampleAsset,
   fmtBytes,
@@ -21,6 +22,9 @@ import {
   type AudioContextLike,
   type CheckRow,
   type PlaybackEnv,
+  type PlayFramesResult,
+  type PlayRunOptions,
+  type PlaySample,
   type SampleTools,
 } from "./playbackCheck";
 
@@ -43,6 +47,25 @@ interface Rig {
 const even = (count: number, step: number): number[] =>
   Array.from({ length: count }, (_, i) => Math.round(i * step * 1000) / 1000);
 
+/** `count` presented frames, `gapMs` apart in real time, each advancing the video by `step` seconds. */
+function series(count: number, gapMs: number, step: number, startMs = 80): PlaySample[] {
+  return Array.from({ length: count }, (_, i) => ({
+    atMs: Math.round(startMs + i * gapMs),
+    mediaS: Math.round(i * step * 1000) / 1000,
+  }));
+}
+
+function makePlay(over: Partial<PlayFramesResult> = {}): PlayFramesResult {
+  return {
+    via: "rvfc",
+    samples: series(90, 33.3, 1 / 30),
+    waiting: 0,
+    stalled: 0,
+    quality: { total: 90, dropped: 0 },
+    ...over,
+  };
+}
+
 function makeSample(over: Partial<SampleTools> = {}): SampleTools & { closed: number } {
   const sample = {
     closed: 0,
@@ -55,14 +78,8 @@ function makeSample(over: Partial<SampleTools> = {}): SampleTools & { closed: nu
       ms: 310,
     }),
     open: async () => ({ width: 1920, height: 1080, durationS: 13.4 }),
-    playFrames: async () => ({
-      via: "rvfc" as const,
-      frames: 58,
-      elapsedMs: 2000,
-      mediaAdvanceS: 1.98,
-      drawMs: [3, 4, 5, 4, 6],
-      mediaTimes: even(59, 1 / 30),
-    }),
+    playFrames: async () => makePlay(),
+    copyMs: async () => [3, 4, 5, 4, 6],
     seekMs: async () => [80, 90, 100, 120, 95, 110],
     textureMs: async () => [2, 3, 2, 3] as number[] | null,
     close() {
@@ -219,6 +236,52 @@ describe("skippedFrames", () => {
     expect(skippedFrames([])).toEqual({ skipped: 0, expected: 0 });
     expect(skippedFrames([0.5])).toEqual({ skipped: 0, expected: 0 });
     expect(skippedFrames([0, 1 / 30])).toEqual({ skipped: 0, expected: 1 });
+  });
+});
+
+describe("analyzePlayback", () => {
+  it("reads a healthy run as real time with a quick start", () => {
+    const stats = analyzePlayback(series(61, 33.3, 1 / 30));
+    expect(stats.frames).toBe(60);
+    expect(Math.abs(stats.realtime - 1) < 0.01).toBe(true);
+    expect(Math.abs(stats.steadyRealtime - 1) < 0.01).toBe(true);
+    expect(stats.firstFrameMs).toBe(80);
+    expect(stats.movingMs < 250).toBe(true);
+    expect(stats.skipped).toBe(0);
+  });
+
+  it("separates a slow start from a slow crawl", () => {
+    // 15 frames crawling at ~0.33×, then 45 frames at full speed.
+    const crawl = series(15, 100, 1 / 30);
+    const last = crawl[crawl.length - 1];
+    const normal = Array.from({ length: 45 }, (_, i) => ({
+      atMs: Math.round(last.atMs + (i + 1) * 33.3),
+      mediaS: last.mediaS + (i + 1) / 30,
+    }));
+    const stats = analyzePlayback([...crawl, ...normal]);
+    expect(stats.realtime < 0.75).toBe(true);
+    expect(Math.abs(stats.steadyRealtime - 1) < 0.02).toBe(true);
+  });
+
+  it("reports a steady crawl as slow in both views", () => {
+    const stats = analyzePlayback(series(26, 80, 1 / 30));
+    expect(Math.abs(stats.realtime - 0.417) < 0.02).toBe(true);
+    expect(Math.abs(stats.steadyRealtime - 0.417) < 0.02).toBe(true);
+  });
+
+  it("knows when the picture never really moved", () => {
+    const stats = analyzePlayback(series(10, 33, 0.001));
+    expect(Number.isNaN(stats.movingMs)).toBe(true);
+  });
+
+  it("copes with no frames and with one frame", () => {
+    const none = analyzePlayback([]);
+    expect(none.frames).toBe(0);
+    expect(Number.isNaN(none.firstFrameMs)).toBe(true);
+    expect(Number.isNaN(none.realtime)).toBe(true);
+    const one = analyzePlayback([{ atMs: 250, mediaS: 1 }]);
+    expect(one.frames).toBe(0);
+    expect(one.firstFrameMs).toBe(250);
   });
 });
 
@@ -421,13 +484,14 @@ describe("runPlaybackCheck — codec rows", () => {
 describe("runPlaybackCheck — your video", () => {
   it("grades a healthy phone as all ok", async () => {
     const rows = await run(makeEnv());
-    for (const id of ["sample.audio", "sample.open", "speed.play", "speed.draw"]) {
+    const ids = ["sample.audio", "sample.open", "speed.play.hidden", "speed.play.visible"];
+    for (const id of [...ids, "speed.play.again", "speed.play.draw", "speed.copy"]) {
       expect(row(rows, id).status).toBe("ok");
     }
     expect(row(rows, "speed.seek").status).toBe("ok");
     expect(row(rows, "speed.texture").status).toBe("ok");
     expect(row(rows, "sample.open").detail).toBe("1920×1080 · 13.4 s");
-    expect(row(rows, "speed.play").detail).toContain("0 of 58 frames skipped (0%)");
+    expect(row(rows, "speed.play.hidden").detail).toContain("0 of 89 frames skipped (0%)");
     expect(row(rows, "sample.pick").detail).toContain("IMG_0042.MOV");
     expect(row(rows, "sample.pick").detail).toContain("48.0 MB");
   });
@@ -436,81 +500,177 @@ describe("runPlaybackCheck — your video", () => {
     const rows = await run(makeEnv({ loadSample: async () => null }));
     expect(row(rows, "sample.pick").status).toBe("skip");
     expect(row(rows, "sample.pick").detail).toContain("Import one");
-    expect(rows.some((r) => r.id === "speed.draw")).toBe(false);
+    expect(rows.some((r) => r.id === "speed.copy")).toBe(false);
+  });
+
+  it("plays hidden, visible, hidden again, then visible with drawing", async () => {
+    const seen: PlayRunOptions[] = [];
+    const sample = makeSample({
+      playFrames: async (opts) => {
+        seen.push(opts);
+        return makePlay();
+      },
+    });
+    await run(makeEnv({ loadSample: async () => sample }));
+    expect(seen).toEqual([
+      { ms: 10, visible: false, draw: false },
+      { ms: 10, visible: true, draw: false },
+      { ms: 10, visible: false, draw: false },
+      { ms: 10, visible: true, draw: true },
+    ]);
+  });
+
+  it("shows a throttled hidden video: slow hidden, fine visible, slow hidden again", async () => {
+    const crawl = series(40, 80, 1 / 30);
+    const fast = series(90, 33.3, 1 / 30);
+    const sample = makeSample({
+      playFrames: async (opts) => makePlay({ samples: opts.visible ? fast : crawl }),
+    });
+    const rows = await run(makeEnv({ loadSample: async () => sample }));
+    expect(row(rows, "speed.play.hidden").status).toBe("fail");
+    expect(row(rows, "speed.play.hidden").detail).toContain("0.42×");
+    expect(row(rows, "speed.play.visible").status).toBe("ok");
+    expect(row(rows, "speed.play.again").status).toBe("fail");
+    expect(row(rows, "speed.play.draw").status).toBe("ok");
+  });
+
+  it("shows a first-play warm-up: only the first run is slow", async () => {
+    let calls = 0;
+    const slow = series(40, 80, 1 / 30);
+    const fast = series(90, 33.3, 1 / 30);
+    const sample = makeSample({
+      playFrames: async () => {
+        calls += 1;
+        return makePlay({ samples: calls === 1 ? slow : fast });
+      },
+    });
+    const rows = await run(makeEnv({ loadSample: async () => sample }));
+    expect(row(rows, "speed.play.hidden").status).toBe("fail");
+    expect(row(rows, "speed.play.visible").status).toBe("ok");
+    expect(row(rows, "speed.play.again").status).toBe("ok");
+  });
+
+  it("grades a slow start by the second half, and prints both speeds", async () => {
+    const crawl = series(15, 100, 1 / 30);
+    const last = crawl[crawl.length - 1];
+    const normal = Array.from({ length: 45 }, (_, i) => ({
+      atMs: Math.round(last.atMs + (i + 1) * 33.3),
+      mediaS: last.mediaS + (i + 1) / 30,
+    }));
+    const samples = [...crawl, ...normal];
+    const sample = makeSample({ playFrames: async () => makePlay({ samples }) });
+    const rows = await run(makeEnv({ loadSample: async () => sample }));
+    const detail = row(rows, "speed.play.hidden").detail;
+    expect(row(rows, "speed.play.hidden").status).toBe("ok");
+    expect(detail).toContain("overall, 1.0");
+  });
+
+  it("warns when the picture takes a while to start moving", async () => {
+    const late = series(90, 33.3, 1 / 30, 700);
+    const sample = makeSample({ playFrames: async () => makePlay({ samples: late }) });
+    const rows = await run(makeEnv({ loadSample: async () => sample }));
+    expect(row(rows, "speed.play.hidden").status).toBe("warn");
+    expect(row(rows, "speed.play.hidden").detail).toContain("first frame after 700 ms");
   });
 
   it("grades slow numbers as warnings and failures, and prints them", async () => {
     const sample = makeSample({
-      playFrames: async () => ({
-        via: "raf" as const,
-        frames: 30,
-        elapsedMs: 2000,
-        mediaAdvanceS: 1.2,
-        drawMs: [30, 32, 35, 31, 40],
-        mediaTimes: even(31, 1 / 15),
-      }),
+      playFrames: async () => makePlay({ samples: series(31, 66.7, 1 / 30) }),
+      copyMs: async () => [30, 32, 35, 31, 40],
       seekMs: async () => [300, 350, 320, 310, 330, 340],
       textureMs: async () => [10, 12, 11, 9],
     });
     const rows = await run(makeEnv({ loadSample: async () => sample }));
-    expect(row(rows, "speed.play").status).toBe("fail");
-    expect(row(rows, "speed.play").detail).toContain("0.60×");
-    expect(row(rows, "speed.draw").status).toBe("fail");
-    expect(row(rows, "speed.draw").detail).toContain("median 32 ms");
+    expect(row(rows, "speed.play.hidden").status).toBe("fail");
+    expect(row(rows, "speed.play.hidden").detail).toContain("0.50×");
+    expect(row(rows, "speed.copy").status).toBe("fail");
+    expect(row(rows, "speed.copy").detail).toContain("median 32 ms");
     expect(row(rows, "speed.seek").status).toBe("warn");
     expect(row(rows, "speed.texture").status).toBe("warn");
   });
 
   it("catches a stutter that a steady clock would hide", async () => {
-    // The clock ran at 1.0× real time, but every 4th frame was never shown.
-    const shown = even(61, 1 / 30).filter((_, i) => i % 4 !== 3);
-    const sample = makeSample({
-      playFrames: async () => ({
-        via: "rvfc" as const,
-        frames: shown.length - 1,
-        elapsedMs: 2000,
-        mediaAdvanceS: 2,
-        drawMs: [3, 4, 5],
-        mediaTimes: shown,
-      }),
-    });
+    // Real time keeps going, but every 4th frame was never shown.
+    const shown = series(61, 33.3, 1 / 30).filter((_, i) => i % 4 !== 3);
+    const sample = makeSample({ playFrames: async () => makePlay({ samples: shown }) });
     const rows = await run(makeEnv({ loadSample: async () => sample }));
-    expect(row(rows, "speed.play").status).toBe("fail");
-    expect(row(rows, "speed.play").detail).toContain("video clock ran at 1.00× real time");
-    expect(row(rows, "speed.play").detail).toContain("frames skipped (25%)");
+    expect(row(rows, "speed.play.hidden").status).toBe("fail");
+    expect(row(rows, "speed.play.hidden").detail).toContain("clock 1.00×");
+    expect(row(rows, "speed.play.hidden").detail).toContain("frames skipped (25%)");
   });
 
   it("only warns when a few frames were skipped", async () => {
-    const times = even(61, 1 / 30);
+    const times = series(61, 33.3, 1 / 30);
     times.splice(20, 3); // three frames missing out of ~60 → about 5%
+    const sample = makeSample({ playFrames: async () => makePlay({ samples: times }) });
+    const rows = await run(makeEnv({ loadSample: async () => sample }));
+    expect(row(rows, "speed.play.hidden").status).toBe("warn");
+  });
+
+  it("prints the browser's own stall and dropped-frame counts when it has them", async () => {
+    const stalled = makePlay({ waiting: 3, stalled: 1, quality: { total: 90, dropped: 5 } });
+    const sample = makeSample({ playFrames: async () => stalled });
+    const rows = await run(makeEnv({ loadSample: async () => sample }));
+    const detail = row(rows, "speed.play.hidden").detail;
+    expect(detail).toContain("waiting 3× · stalled 1×");
+    expect(detail).toContain("decoder dropped 5 of 90");
+  });
+
+  it("leaves out the decoder count when the browser has none", async () => {
+    const sample = makeSample({ playFrames: async () => makePlay({ quality: null }) });
+    const rows = await run(makeEnv({ loadSample: async () => sample }));
+    expect(row(rows, "speed.play.hidden").detail.includes("decoder dropped")).toBe(false);
+  });
+
+  it("fails a run that was refused but still does the others", async () => {
     const sample = makeSample({
-      playFrames: async () => ({
-        via: "rvfc" as const,
-        frames: times.length - 1,
-        elapsedMs: 2000,
-        mediaAdvanceS: 2,
-        drawMs: [3, 4, 5],
-        mediaTimes: times,
-      }),
+      playFrames: async (opts) => {
+        if (!opts.visible) throw new Error("play() was refused");
+        return makePlay();
+      },
     });
     const rows = await run(makeEnv({ loadSample: async () => sample }));
-    expect(row(rows, "speed.play").status).toBe("warn");
+    expect(row(rows, "speed.play.hidden").status).toBe("fail");
+    expect(row(rows, "speed.play.hidden").detail).toBe("play() was refused");
+    expect(row(rows, "speed.play.visible").status).toBe("ok");
+  });
+
+  it("fails the drawing run on its own when drawing is what breaks", async () => {
+    const sample = makeSample({
+      playFrames: async (opts) => {
+        if (opts.draw) throw new Error("no canvas");
+        return makePlay();
+      },
+    });
+    const rows = await run(makeEnv({ loadSample: async () => sample }));
+    expect(row(rows, "speed.play.draw").status).toBe("fail");
+    expect(row(rows, "speed.play.draw").detail).toBe("no canvas");
+    expect(row(rows, "speed.play.visible").status).toBe("ok");
+    expect(row(rows, "speed.copy").status).toBe("ok");
+  });
+
+  it("reports a failed copy measurement and carries on", async () => {
+    const copyMs = async (): Promise<number[]> => {
+      throw new Error("canvas lost");
+    };
+    const rows = await run(makeEnv({ loadSample: async () => makeSample({ copyMs }) }));
+    expect(row(rows, "speed.copy").status).toBe("fail");
+    expect(row(rows, "speed.copy").detail).toBe("canvas lost");
+    expect(row(rows, "speed.seek").status).toBe("ok");
+  });
+
+  it("says so when no copies could be measured", async () => {
+    const sample = makeSample({ copyMs: async () => [] });
+    const rows = await run(makeEnv({ loadSample: async () => sample }));
+    expect(row(rows, "speed.copy").status).toBe("info");
+    expect(row(rows, "speed.copy").detail).toBe("No copies were measured.");
   });
 
   it("fails playback that delivered no frames at all", async () => {
-    const sample = makeSample({
-      playFrames: async () => ({
-        via: "rvfc" as const,
-        frames: 0,
-        elapsedMs: 2000,
-        mediaAdvanceS: 2,
-        drawMs: [],
-        mediaTimes: [],
-      }),
-    });
+    const sample = makeSample({ playFrames: async () => makePlay({ samples: [], quality: null }) });
     const rows = await run(makeEnv({ loadSample: async () => sample }));
-    expect(row(rows, "speed.play").status).toBe("fail");
-    expect(row(rows, "speed.draw").detail).toBe("No copies were measured.");
+    expect(row(rows, "speed.play.hidden").status).toBe("fail");
+    expect(row(rows, "speed.play.draw").status).toBe("fail");
   });
 
   it("skips the speed rows when the video will not open, and still closes it", async () => {
@@ -521,7 +681,8 @@ describe("runPlaybackCheck — your video", () => {
     });
     const rows = await run(makeEnv({ loadSample: async () => sample }));
     expect(row(rows, "sample.open").status).toBe("fail");
-    for (const id of ["speed.play", "speed.draw", "speed.seek", "speed.texture"]) {
+    const blocked = ["speed.play.hidden", "speed.play.visible", "speed.play.again"];
+    for (const id of [...blocked, "speed.play.draw", "speed.copy", "speed.seek", "speed.texture"]) {
       expect(row(rows, id).status).toBe("skip");
     }
     expect(sample.closed).toBe(1);

@@ -11,6 +11,8 @@ import {
   type OpenedVideo,
   type PlaybackEnv,
   type PlayFramesResult,
+  type PlayRunOptions,
+  type PlaySample,
   type SampleTools,
   type ToneKind,
 } from "./playbackCheck";
@@ -120,6 +122,71 @@ function webgl(): { version: 1 | 2; maxTextureSize: number } | null {
 /** Preview-sized canvas: roughly what a phone's player draws (see how_it_works: Stage). */
 const DRAW_MAX_SIDE = 1280;
 
+/**
+ * The measuring element's look. "Hidden" is what the poster code uses (tiny and nearly transparent; not
+ * display:none, which iOS may not decode). "Visible" is a small opaque corner thumbnail — the A/B that tells us
+ * whether iOS throttles video it considers invisible.
+ */
+function setVisible(v: HTMLVideoElement, visible: boolean): void {
+  Object.assign(v.style, {
+    position: "fixed",
+    left: visible ? "8px" : "0",
+    top: visible ? "8px" : "0",
+    width: visible ? "160px" : "2px",
+    height: visible ? "auto" : "2px",
+    opacity: visible ? "1" : "0.01",
+    zIndex: visible ? "2147483000" : "auto",
+    borderRadius: visible ? "8px" : "0",
+    pointerEvents: "none",
+  });
+}
+
+/** The decoder's own frame counts, where the browser offers them (Safari does). */
+function qualityOf(v: HTMLVideoElement): { total: number; dropped: number } | null {
+  if (typeof v.getVideoPlaybackQuality !== "function") return null;
+  const q = v.getVideoPlaybackQuality();
+  return { total: q.totalVideoFrames, dropped: q.droppedVideoFrames };
+}
+
+/**
+ * Call `onFrame` for every new picture the video presents, with the video's own time at that frame. Uses the
+ * video's frame callback where it exists (exact), otherwise animation frames that saw the video time change.
+ * Returns the way of stopping and which clock is in use.
+ */
+function onEachFrame(
+  v: HTMLVideoElement,
+  onFrame: (mediaTime: number) => void,
+): { stop: () => void; via: "rvfc" | "raf" } {
+  const viaCallback = typeof v.requestVideoFrameCallback === "function";
+  let stopped = false;
+  let lastSeen = -1;
+  const tick = (_now?: number, meta?: { mediaTime?: number }) => {
+    if (stopped) return;
+    const mediaTime = meta?.mediaTime ?? v.currentTime;
+    if (viaCallback || mediaTime !== lastSeen) {
+      lastSeen = mediaTime;
+      onFrame(mediaTime);
+    }
+    schedule();
+  };
+  const schedule = () => {
+    if (viaCallback) v.requestVideoFrameCallback(tick);
+    else requestAnimationFrame(tick);
+  };
+  schedule();
+  return { stop: () => (stopped = true), via: viaCallback ? "rvfc" : "raf" };
+}
+
+function previewCanvas(v: HTMLVideoElement) {
+  const { w, h } = fitSize(v.videoWidth, v.videoHeight, DRAW_MAX_SIDE);
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("No 2D canvas.");
+  return { ctx, w, h };
+}
+
 function makeSampleTools(name: string, blob: Blob): SampleTools {
   let url: string | null = null;
   let video: HTMLVideoElement | null = null;
@@ -169,16 +236,7 @@ function makeSampleTools(name: string, blob: Blob): SampleTools {
       url = URL.createObjectURL(blob);
       const v = makeMediaElement("video") as HTMLVideoElement;
       v.preload = "auto";
-      // Not display:none (iOS may not decode those) — tiny, transparent and inert, like the poster code.
-      Object.assign(v.style, {
-        position: "fixed",
-        left: "0",
-        top: "0",
-        width: "2px",
-        height: "2px",
-        opacity: "0.01",
-        pointerEvents: "none",
-      });
+      setVisible(v, false);
       v.setAttribute("aria-hidden", "true");
       document.body.appendChild(v);
       video = v;
@@ -195,60 +253,81 @@ function makeSampleTools(name: string, blob: Blob): SampleTools {
       return { width: v.videoWidth, height: v.videoHeight, durationS: v.duration };
     },
 
-    async playFrames(ms: number): Promise<PlayFramesResult> {
+    async playFrames(opts: PlayRunOptions): Promise<PlayFramesResult> {
       const v = need();
-      const { w, h } = fitSize(v.videoWidth, v.videoHeight, DRAW_MAX_SIDE);
-      const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("No 2D canvas.");
-      if (v.duration - v.currentTime < ms / 1000 + 0.5) v.currentTime = 0;
-
-      const viaCallback = typeof v.requestVideoFrameCallback === "function";
-      const drawMs: number[] = [];
-      const mediaTimes: number[] = [];
-      let firstAt = 0;
-      let lastAt = 0;
-      let lastSeen = -1;
-      let stopped = false;
-
-      // The frame callback also reports the exact time of the frame it presents; animation frames do not.
-      const tick = (_now?: number, meta?: { mediaTime?: number }) => {
-        if (stopped) return;
-        const mediaTime = meta?.mediaTime ?? v.currentTime;
-        // Without a frame callback an animation frame fires even when no new picture arrived: count only changes.
-        if (viaCallback || mediaTime !== lastSeen) {
-          const now = performance.now();
-          ctx.drawImage(v, 0, 0, w, h);
-          drawMs.push(performance.now() - now);
-          if (mediaTimes.length === 0) firstAt = now;
-          lastAt = now;
-          mediaTimes.push(mediaTime);
-          lastSeen = mediaTime;
-        }
-        schedule();
-      };
-      const schedule = () => {
-        if (viaCallback) v.requestVideoFrameCallback(tick);
-        else requestAnimationFrame(tick);
-      };
-
-      schedule();
-      await playQuietly(v);
-      await sleep(ms);
-      stopped = true;
+      // Drawing, when asked for, is the ordinary thing a player does: a queued copy per frame, no read-back.
+      const target = opts.draw ? previewCanvas(v) : null;
       v.pause();
-      const ticks = mediaTimes.length;
-      return {
-        via: viaCallback ? "rvfc" : "raf",
-        // Intervals between frames: the first frame only starts the clock.
-        frames: Math.max(0, ticks - 1),
-        elapsedMs: ticks > 1 ? lastAt - firstAt : 0,
-        mediaAdvanceS: ticks > 1 ? mediaTimes[ticks - 1] - mediaTimes[0] : 0,
-        drawMs,
-        mediaTimes,
-      };
+      if (v.duration - v.currentTime < opts.ms / 1000 + 0.5) {
+        v.currentTime = 0;
+        await waitForEvent(asVideoLike(v), ["seeked"], 6000);
+      }
+
+      setVisible(v, opts.visible);
+      const samples: PlaySample[] = [];
+      let waiting = 0;
+      let stalled = 0;
+      const onWaiting = () => (waiting += 1);
+      const onStalled = () => (stalled += 1);
+      v.addEventListener("waiting", onWaiting);
+      v.addEventListener("stalled", onStalled);
+      const before = qualityOf(v);
+      const started = performance.now();
+      const loop = onEachFrame(v, (mediaS) => {
+        samples.push({ atMs: performance.now() - started, mediaS });
+        if (target) target.ctx.drawImage(v, 0, 0, target.w, target.h);
+      });
+
+      try {
+        await playQuietly(v);
+        await sleep(Math.max(0, opts.ms - (performance.now() - started)));
+      } finally {
+        loop.stop();
+        v.pause();
+        v.removeEventListener("waiting", onWaiting);
+        v.removeEventListener("stalled", onStalled);
+        setVisible(v, false);
+      }
+      const after = qualityOf(v);
+      let quality: { total: number; dropped: number } | null = null;
+      if (before && after) {
+        quality = { total: after.total - before.total, dropped: after.dropped - before.dropped };
+      }
+      return { via: loop.via, samples, waiting, stalled, quality };
+    },
+
+    async copyMs(n: number): Promise<number[]> {
+      const v = need();
+      const target = previewCanvas(v);
+      v.pause();
+      setVisible(v, true);
+      const out: number[] = [];
+      let lastAt = -Infinity;
+      let finish: () => void = () => undefined;
+      const full = new Promise<void>((resolve) => (finish = resolve));
+      // One forced-finish copy about every 250 ms of NEW frames. Forcing completion (reading a pixel back)
+      // stalls the page, so it is kept sparse and kept out of the playback runs above.
+      const loop = onEachFrame(v, () => {
+        const at = performance.now();
+        if (at - lastAt < 250) {
+          target.ctx.drawImage(v, 0, 0, target.w, target.h);
+          return;
+        }
+        lastAt = at;
+        target.ctx.drawImage(v, 0, 0, target.w, target.h);
+        target.ctx.getImageData(0, 0, 1, 1);
+        out.push(performance.now() - at);
+        if (out.length >= n) finish();
+      });
+      try {
+        await playQuietly(v);
+        await Promise.race([full, sleep(n * 400 + 2000)]);
+      } finally {
+        loop.stop();
+        v.pause();
+        setVisible(v, false);
+      }
+      return out;
     },
 
     async seekMs(n: number): Promise<number[]> {

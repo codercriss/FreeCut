@@ -162,7 +162,7 @@ Each phase lists **scope**, **new capabilities beyond what the UI currently sugg
 **Acceptance (met in Chromium; iPhone verification = your 1a review):** import a video, a photo and an audio file → correct tiles, durations, waveform; bad/unsupported files explained without blocking the rest; add to timeline; close and reopen → everything is still there; upgrading a real Phase 0 database loses nothing.
 
 #### 1b — Preview & audio *(in progress: 1b.0 done, 1b.1 next)*
-- **1b.0 (delivered, v1.3.0):** the research below, done first as planned, plus a **Playback check** in the Me tab that measures the open questions on the owner's own phone with their own video. Findings and the proposed architecture: `Knowledge_Contribution.md` R-001/R-004/R-005 and `Handover.md` D-030.
+- **1b.0 (delivered v1.3.0; re-probe v1.3.1):** the research below, done first as planned, plus a **Playback check** in the Me tab that measures the open questions on the owner's own phone with their own video. Findings and the proposed architecture: `Knowledge_Contribution.md` R-001/R-004/R-005 and `Handover.md` D-030. **First device report (2026-10-31): the audio half is confirmed on the owner's iPhone; the picture half is blocked by one unexplained result — a muted hidden `<video>` ran at 0.42× real time (Handover N34). 1.3.1 adds an A/B/A re-probe to explain it before 1b.1 starts.**
 - **1b.1 (next, after the screenshot):** the engine — audio-buffer playback with `AudioContext.currentTime` as master clock, muted `<video>` painted to a 2D canvas against it, real Play/Pause, live level meter, track mute. WebCodecs and WebGL are **deliberately deferred** (R-001/R-004).
 - **Preview (the silent, playhead-following full-resolution frame already shipped in 1a.3):** audio-driven master clock (K3), real frame display (WebCodecs with `HTMLVideoElement` fallback) composited on a WebGL2 canvas, frame-accurate seek/scrub, a finer-grained filmstrip when zoomed in (basic per-moment filmstrips shipped in 1a.2), "Original" toggle, fit/fill, fullscreen.
 - **Audio playback** via Web Audio with the audio clock as master; live level meter from a real `AnalyserNode`; honour track mute.
@@ -389,8 +389,8 @@ Updated at the end of each phase delivery.
 | **1a.1** | ✔ **delivered and confirmed on a real iPhone (and Android)** | 2026-10-20 | v1.2.1: video thumbnails now work |
 | **1a.2** | ✔ **delivered and confirmed working** | 2026-10-20 | v1.2.2: real per-moment timeline filmstrips |
 | **1a.3** | ✔ **delivered; retest passed (owner, 2026-10-30)** | 2026-10-20 | v1.2.3: sharp originals in the player + sharper thumbnails |
-| **1b.0** | ✔ **delivered — needs one run on your phone** | 2026-10-30 | v1.3.0: iPhone Safari research (R-001/R-004/R-005) + the in-app **Playback check** (Me tab). Script: `Handover.md §10` top |
-| 1b | ◐ **in progress — engine (1b.1) waits for your Playback-check screenshot** | — | preview & audio |
+| **1b.0** | ✔ **delivered — device run #1 received; one re-run needed** | 2026-10-31 | v1.3.1: first iPhone report (audio side ✔, WebCodecs ✖ for HEVC) + a sharper A/B/A playback re-probe. Script: `Handover.md §10` top |
+| 1b | ◐ **in progress — engine (1b.1) waits for the re-run** | — | preview & audio |
 | 1c | ☐ | — | projects & heavy files |
 | 2 | ☐ | — | |
 | E1 | ☐ | — | thin export (after 2) |

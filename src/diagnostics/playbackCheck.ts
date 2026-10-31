@@ -39,17 +39,33 @@ export type AudioDecodeResult =
   /** Skipped on purpose: decoding needs the whole file in memory. */
   | { kind: "too-big"; limitBytes: number };
 
+/** One presented video frame during a playback run. */
+export interface PlaySample {
+  /** Milliseconds since `play()` was requested. */
+  atMs: number;
+  /** The video's own time at that frame, in seconds. */
+  mediaS: number;
+}
+
+export interface PlayRunOptions {
+  /** How long the run lasts, in milliseconds. */
+  ms: number;
+  /** Show the video as a small corner thumbnail instead of leaving it effectively invisible. */
+  visible: boolean;
+  /** Also copy every frame to a 2D canvas (queued, as a real player would), to see if playback still keeps up. */
+  draw: boolean;
+}
+
 export interface PlayFramesResult {
   /** Which clock delivered the frames: the video's own callback, or a plain animation frame. */
   via: "rvfc" | "raf";
-  frames: number;
-  elapsedMs: number;
-  /** How far the video's own clock advanced meanwhile; ≈ elapsed when the decoder keeps up. */
-  mediaAdvanceS: number;
-  /** Milliseconds each video → 2D canvas copy took while playing. */
-  drawMs: number[];
-  /** The video's own time (seconds) at every drawn frame, in order — gaps reveal skipped frames. */
-  mediaTimes: number[];
+  /** Every frame that was presented, in order. */
+  samples: PlaySample[];
+  /** `waiting` / `stalled` events during the run: the browser saying it ran out of data. */
+  waiting: number;
+  stalled: number;
+  /** The decoder's own frame counts for the run (`getVideoPlaybackQuality`); null when unavailable. */
+  quality: { total: number; dropped: number } | null;
 }
 
 export interface OpenedVideo {
@@ -64,7 +80,9 @@ export interface SampleTools {
   decodeAudio(): Promise<AudioDecodeResult>;
   /** Attach the video (muted, inline), get a real frame decoded, report its size. */
   open(): Promise<OpenedVideo>;
-  playFrames(ms: number): Promise<PlayFramesResult>;
+  playFrames(opts: PlayRunOptions): Promise<PlayFramesResult>;
+  /** Milliseconds for a video → 2D canvas copy forced to finish, sampled sparsely from new frames of a playing video. */
+  copyMs(n: number): Promise<number[]>;
   /** Milliseconds from setting `currentTime` until `seeked`, for `n` spread-out targets. */
   seekMs(n: number): Promise<number[]>;
   /** Milliseconds per `texImage2D(video)` upload; null when WebGL is unavailable. */
@@ -235,6 +253,9 @@ export const LIMITS = {
   /** Share of frames the browser skipped while playing. */
   skippedOk: 0.02,
   skippedWarn: 0.1,
+  /** From pressing play until the picture is really moving (a Play button should feel immediate). */
+  startupOkMs: 400,
+  startupWarnMs: 1000,
   /** Biggest file we will read whole into memory for the audio-decode test. */
   decodeMaxBytes: 120 * 1024 * 1024,
 } as const;
@@ -276,6 +297,62 @@ const RANK: Record<CheckStatus, number> = { ok: 0, info: 0, skip: 0, warn: 1, fa
 
 /** The more serious of two grades. */
 export const worse = (a: CheckStatus, b: CheckStatus): CheckStatus => (RANK[b] > RANK[a] ? b : a);
+
+export interface PlaybackStats {
+  /** Gaps between presented frames (one fewer than frames shown). */
+  frames: number;
+  elapsedMs: number;
+  mediaAdvanceS: number;
+  /** Seconds of video per real second over the whole run; NaN when it can't be known. */
+  realtime: number;
+  /** The same over the second half of the run, ignoring any slow start. */
+  steadyRealtime: number;
+  fps: number;
+  /** Milliseconds from asking to play until the first frame appeared; NaN when none did. */
+  firstFrameMs: number;
+  /** Milliseconds until the video had really moved 0.1 s; NaN when it never did. */
+  movingMs: number;
+  skipped: number;
+  expected: number;
+}
+
+/** Turn a run's frame timeline into numbers. A slow start and a slow crawl need different fixes, so both show. */
+export function analyzePlayback(samples: readonly PlaySample[]): PlaybackStats {
+  const n = samples.length;
+  const empty: PlaybackStats = {
+    frames: 0,
+    elapsedMs: 0,
+    mediaAdvanceS: 0,
+    realtime: Number.NaN,
+    steadyRealtime: Number.NaN,
+    fps: 0,
+    firstFrameMs: n > 0 ? samples[0].atMs : Number.NaN,
+    movingMs: Number.NaN,
+    skipped: 0,
+    expected: 0,
+  };
+  if (n < 2) return empty;
+  const first = samples[0];
+  const last = samples[n - 1];
+  const mid = samples[n >> 1];
+  const elapsedMs = last.atMs - first.atMs;
+  const mediaAdvanceS = last.mediaS - first.mediaS;
+  const steadyMs = last.atMs - mid.atMs;
+  const moved = samples.find((x) => x.mediaS - first.mediaS >= 0.1);
+  const { skipped, expected } = skippedFrames(samples.map((x) => x.mediaS));
+  return {
+    frames: n - 1,
+    elapsedMs,
+    mediaAdvanceS,
+    realtime: elapsedMs > 0 ? mediaAdvanceS / (elapsedMs / 1000) : Number.NaN,
+    steadyRealtime: steadyMs > 0 ? (last.mediaS - mid.mediaS) / (steadyMs / 1000) : Number.NaN,
+    fps: elapsedMs > 0 ? (n - 1) / (elapsedMs / 1000) : 0,
+    firstFrameMs: first.atMs,
+    movingMs: moved ? moved.atMs : Number.NaN,
+    skipped,
+    expected,
+  };
+}
 
 /** The imported video to measure with: the largest stored one (the hardest case). Pure. */
 export function findSampleAsset(assets: readonly Asset[]): Asset | null {
@@ -338,7 +415,7 @@ const yesNo = (b: boolean): string => (b ? "✔" : "✘");
 export interface RunOptions {
   /** Limit for each browser call. Default 8 s. */
   timeoutMs?: number;
-  /** How long the muted playback measurement runs. Default 2000 ms. */
+  /** How long each muted playback run lasts. Default 3000 ms. */
   playMs?: number;
 }
 
@@ -411,7 +488,7 @@ export async function runPlaybackCheck(
   const run: Run = {
     env,
     timeoutMs: opts.timeoutMs ?? 8000,
-    playMs: opts.playMs ?? 2000,
+    playMs: opts.playMs ?? 3000,
     add: (row) => {
       rows.push(row);
       emit(row);
@@ -540,7 +617,7 @@ async function audioRows(run: Run, g: Gesture): Promise<void> {
   };
   if (volume === true) {
     vol.status = "ok";
-    vol.detail = "Setting a <video>/<audio> volume works.";
+    vol.detail = "A set volume sticks (reads back 0.5); whether it changes loudness isn't tested.";
   } else if (volume === false) {
     vol.status = "warn";
     vol.detail = "Ignored here (reads back 1) — per-clip volume must use Web Audio, not <video>.";
@@ -658,8 +735,8 @@ async function sampleRows(run: Run): Promise<void> {
     if (!opened.ok) {
       add(speedRow("sample.open", "Open the video", "fail", opened.error));
       const blocked = "Needs the video to open first.";
-      add(speedRow("speed.play", "Playing smoothly", "skip", blocked));
-      add(speedRow("speed.draw", "Copy to canvas", "skip", blocked));
+      for (const spec of PLAY_RUNS) add(speedRow(spec.id, spec.label, "skip", blocked));
+      add(speedRow("speed.copy", "Copy to canvas", "skip", blocked));
       add(speedRow("speed.seek", "Scrubbing", "skip", blocked));
       add(speedRow("speed.texture", "Upload to WebGL", "skip", blocked));
       return;
@@ -668,6 +745,7 @@ async function sampleRows(run: Run): Promise<void> {
     const size = `${o.width}×${o.height} · ${o.durationS.toFixed(1)} s`;
     add(speedRow("sample.open", "Open the video", "ok", size));
     await playRows(run, sample);
+    await copyRows(run, sample);
     await seekRow(run, sample);
     await textureRow(run, sample);
   } finally {
@@ -695,43 +773,79 @@ async function decodeRow(run: Run, sample: SampleTools): Promise<void> {
   }
 }
 
+interface PlayRunSpec {
+  id: string;
+  label: string;
+  visible: boolean;
+  draw: boolean;
+}
+
+/**
+ * Hidden → visible → hidden again → visible with drawing. The first three tell a throttled hidden video (slow,
+ * fast, slow) from a first-play warm-up (slow, fast, fast) from a phone that simply cannot keep up (slow, slow,
+ * slow). The last is the realistic design: the picture element on screen, painted to a canvas.
+ */
+const PLAY_RUNS: readonly PlayRunSpec[] = [
+  { id: "speed.play.hidden", label: "Playing (hidden video)", visible: false, draw: false },
+  { id: "speed.play.visible", label: "Playing (visible video)", visible: true, draw: false },
+  { id: "speed.play.again", label: "Playing (hidden again)", visible: false, draw: false },
+  { id: "speed.play.draw", label: "Playing + copy to canvas", visible: true, draw: true },
+];
+
+function playStatus(s: PlaybackStats): CheckStatus {
+  if (s.frames === 0) return "fail";
+  const share = s.expected > 0 ? s.skipped / s.expected : 0;
+  const speed = gradeHigh(s.steadyRealtime, LIMITS.realtimeOk, LIMITS.realtimeWarn);
+  const skipped = gradeLow(share, LIMITS.skippedOk, LIMITS.skippedWarn);
+  const start = gradeLow(s.movingMs, LIMITS.startupOkMs, LIMITS.startupWarnMs);
+  return worse(worse(speed, skipped), start);
+}
+
+function playDetail(r: PlayFramesResult, s: PlaybackStats): string {
+  const times = (x: number) => (Number.isFinite(x) ? `${x.toFixed(2)}×` : "–");
+  const after = (x: number) => (Number.isFinite(x) ? `${Math.round(x)} ms` : "never");
+  const via = r.via === "rvfc" ? "frame callback" : "animation frames";
+  const share = s.expected > 0 ? Math.round((s.skipped / s.expected) * 100) : 0;
+  const secs = (s.elapsedMs / 1000).toFixed(1);
+  const parts = [
+    `${s.frames} frames in ${secs} s (≈ ${s.fps.toFixed(0)} fps via ${via})`,
+    `clock ${times(s.realtime)} overall, ${times(s.steadyRealtime)} in the second half`,
+    `first frame after ${after(s.firstFrameMs)}, moving after ${after(s.movingMs)}`,
+    `${s.skipped} of ${s.expected} frames skipped (${share}%)`,
+    `waiting ${r.waiting}× · stalled ${r.stalled}×`,
+  ];
+  if (r.quality) parts.push(`decoder dropped ${r.quality.dropped} of ${r.quality.total}`);
+  return parts.join(" · ");
+}
+
+function copyRow(times: readonly number[]): CheckRow {
+  const label = "Copy to canvas";
+  if (times.length === 0) return speedRow("speed.copy", label, "info", "No copies were measured.");
+  const med = median(times);
+  const stats = `median ${fmtMs(med)}, slowest ${fmtMs(Math.max(...times))}`;
+  const detail = `One frame to the canvas, forced to finish: ${stats} (${times.length} samples)`;
+  return speedRow("speed.copy", label, gradeLow(med, LIMITS.drawOkMs, LIMITS.drawWarnMs), detail);
+}
+
+async function copyRows(run: Run, sample: SampleTools): Promise<void> {
+  const limit = run.timeoutMs * 2;
+  const copied = await guard(() => sample.copyMs(10), limit, "Copying to the canvas");
+  if (!copied.ok) run.add(speedRow("speed.copy", "Copy to canvas", "fail", copied.error));
+  else run.add(copyRow(copied.value));
+}
+
 async function playRows(run: Run, sample: SampleTools): Promise<void> {
   const limit = run.playMs + run.timeoutMs;
-  const played = await guard(() => sample.playFrames(run.playMs), limit, "Playing muted");
-  if (!played.ok) {
-    run.add(speedRow("speed.play", "Playing smoothly", "fail", played.error));
-    run.add(speedRow("speed.draw", "Copy to canvas", "skip", "Needs playback to work first."));
-    return;
+  for (const spec of PLAY_RUNS) {
+    const opts = { ms: run.playMs, visible: spec.visible, draw: spec.draw };
+    const played = await guard(() => sample.playFrames(opts), limit, spec.label);
+    if (!played.ok) {
+      run.add(speedRow(spec.id, spec.label, "fail", played.error));
+      continue;
+    }
+    const stats = analyzePlayback(played.value.samples);
+    run.add(speedRow(spec.id, spec.label, playStatus(stats), playDetail(played.value, stats)));
   }
-  const p = played.value;
-  const seconds = p.elapsedMs / 1000;
-  const fps = seconds > 0 ? p.frames / seconds : 0;
-  const realtime = seconds > 0 ? p.mediaAdvanceS / seconds : Number.NaN;
-  const via = p.via === "rvfc" ? "frame callback" : "animation frames";
-  const speed = Number.isFinite(realtime) ? `${realtime.toFixed(2)}×` : "–";
-  const { skipped, expected } = skippedFrames(p.mediaTimes);
-  const share = expected > 0 ? skipped / expected : 0;
-  let status = worse(
-    gradeHigh(realtime, LIMITS.realtimeOk, LIMITS.realtimeWarn),
-    gradeLow(share, LIMITS.skippedOk, LIMITS.skippedWarn),
-  );
-  if (p.frames === 0) status = "fail";
-  const parts = [
-    `${p.frames} frames in ${seconds.toFixed(1)} s (≈ ${fps.toFixed(0)} fps via ${via})`,
-    `video clock ran at ${speed} real time`,
-    `${skipped} of ${expected} frames skipped (${(share * 100).toFixed(0)}%)`,
-  ];
-  run.add(speedRow("speed.play", "Playing smoothly", status, parts.join(" · ")));
-
-  const med = median(p.drawMs);
-  let drawDetail = "No copies were measured.";
-  if (p.drawMs.length) {
-    const slow = fmtMs(percentile(p.drawMs, 95));
-    const stats = `median ${fmtMs(med)}, slowest 1 in 20 ${slow}`;
-    drawDetail = `drawImage(video) while playing: ${stats} (${p.drawMs.length} copies)`;
-  }
-  const drawStatus = gradeLow(med, LIMITS.drawOkMs, LIMITS.drawWarnMs);
-  run.add(speedRow("speed.draw", "Copy to canvas", drawStatus, drawDetail));
 }
 
 async function seekRow(run: Run, sample: SampleTools): Promise<void> {

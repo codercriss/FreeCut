@@ -5,10 +5,10 @@
 | | |
 |---|---|
 | **Project** | FreeCut — browser-based video editor (PWA), aiming to be a free CapCut alternative |
-| **Version** | **v1.3.0** — Phase 1b **step 0: research + the in-app Playback check** (1.2.3 = full-quality player · 1.2.2 = real filmstrips · 1.2.1 = iPhone thumbnail fix · 1.2.0 = media import & library) |
-| **Delivered** | 2026-10-30 · `freecut-phase-1b-0.zip` (full) and `freecut-phase-1b-0-changes.zip` (only what changed since 1.2.3 — see `CHANGES.md`) |
-| **Status** | 1.2.3 **retest passed** (you, 2026-10-30). This delivery adds **no sound or playback yet** — it adds a **Playback check** (Me tab) that measures your phone. *Needs one run on your iPhone* (§10 top). ⚠ The full test suite could **not** be run for this delivery (no network in the build sandbox) — see §2f and N30; the first CI run is the real check |
-| **Next** | Send me the Playback-check screenshot → I build 1b.1 (real playing with sound) on what your phone actually does, then 1c, Phase 2, thin export |
+| **Version** | **v1.3.1** — Phase 1b **step 0, patch 1: the A/B/A playback re-probe** (1.3.0 = research + the first Playback check · 1.2.3 = full-quality player · 1.2.2 = real filmstrips · 1.2.1 = iPhone thumbnail fix · 1.2.0 = media import & library) |
+| **Delivered** | 2026-10-31 · `freecut-phase-1b-0-1.zip` (full) and `freecut-phase-1b-0-1-changes.zip` (only what changed since 1.3.0 — see `CHANGES.md`) |
+| **Status** | Your **1.3.0 report is in** (§10 “First device run”): the audio side is confirmed on your iPhone, but one result is unexplained — a muted, hidden `<video>` ran at **0.42× real time** (N34). 1.3.1 adds a sharper A/B/A test to explain it — *needs one more run on your iPhone* (§10 top). ⚠ The full test suite could **not** be run again (no network in the build sandbox) — §2g, N30 |
+| **Next** | Send the re-run → I explain the playback-speed result → then I build 1b.1 (real playing with sound), 1c, Phase 2, thin export |
 
 ---
 
@@ -25,6 +25,8 @@ FreeCut is now an editor you can put **your own media** into. You can import vid
 **Update (1.3.0) — find out before building.** You confirmed the 1.2.3 quality fix. Playing video *with sound, in sync* is the hardest thing so far, and iPhone Safari has quirks that are documented only in old bug reports. So this step does the research first (`Knowledge_Contribution.md` R-001/R-004/R-005) and adds a **Playback check** under **Me → Playback check** that measures the open questions on **your phone, with your own video**. What the research says: (1) the fancy WebCodecs route is not a safe base on iOS 16 (HEVC in particular is unproven, and its audio parts only arrived in Safari 26); (2) sound only starts if it is started *inside the tap*, the silent switch can mute it unless a setting is applied (iOS 16.4+), and iOS ignores a video's own volume — so per-clip volume must go through Web Audio; (3) copying video into WebGL has a history of slow paths on iOS, so start with a plain 2D canvas. The proposed design is **D-030**. **Nothing you edit or play changed** — there is still no sound; the only visible change is the new Me-tab row.
 
 **Honest caveat for this delivery:** the sandbox this was built in had **no network**, so I could not install the project's tools. The new code was checked with a strict TypeScript compile, 56 new tests run in a stand-in runner, and — more convincingly — the **real panel and the real Home screen were exercised in a real (headless) Chromium with real videos**. What was *not* run is listed in §2f. Please check the GitHub **Actions** tab after you upload; if only the *format* step is red, it is cosmetic (N30).
+
+**Update (1.3.1) — your report, and a sharper test.** Your first Playback-check run came back (kept in §10): the **audio side is solid** on your iPhone — sound starts from the tap, the silent-switch fix exists on your iOS, decoding your video's sound took 66 ms, and both test tones played. The research was also right that **WebCodecs can't decode HEVC** on your phone (and has no audio decoder), so playing iPhone clips stays with the browser's own `<video>`. **One result is a real problem:** a muted, hidden `<video>` played at only **0.42× real time** — and the design I proposed (D-030) draws exactly such a video to a canvas. I did not want to build the engine on a guess, and I found my own measurements were too weak to explain it (an average over 2 seconds can't tell a slow start from a slow crawl; the “copy to canvas 0.0 ms” only timed queueing; and your test clip was tiny, 1.1 MB). So **1.3.1 makes the check an A/B/A test** — the same video hidden, then visible as a small corner thumbnail, then hidden again, then visible with every frame painted to a canvas — and records a timeline, start-up delay, stalls and the decoder's own dropped-frame count, so the result itself names the cause. **Nothing you edit or play changed**; the video now briefly flashes in the top-left corner while the check runs.
 
 **Working agreement added:** every update ends with **one plain commit message in the chat** (never in a file), written for you to paste.
 
@@ -136,6 +138,20 @@ Run on 2026-10-30 in a sandbox **without network access**: `npm ci` could not do
 | `webkit-*` and **anything on iPhone Safari** | ✖ not run — that is the whole point of the Playback check |
 
 Not proven by any of this: how your iPhone behaves. This Chromium cannot play H.264/AAC/HEVC, so test videos were WebM; the numbers it printed (copy ≈ 0.6 ms, texture upload ≈ 0.4 ms) say nothing about an A11 phone — they only prove the measurements work.
+
+#### 2g. Delivery 1.3.1 — what was and was **not** run  ⚠ reduced verification (again)
+
+2026-10-31, again in a sandbox **without network access** (`npm ci` impossible), so the same gap as §2f applies; N30 stays open.
+
+| Check | Result |
+|---|---|
+| `npm ci` → `npm run verify`, ESLint, Prettier `format:check`, `vite build`, the existing 315 tests and Playwright specs | ✖ **not run** (N30) |
+| TypeScript, **strict**, the project's flags (global TS 6.0.3), on the new files **plus the real project modules they import** | ✔ clean |
+| New unit tests: now **72** (69 in `playbackCheck.test.ts`, 3 in `toneWav.test.ts`) — run through the **stand-in runner**, not real vitest | ✔ 72/72. New cases cover the A/B/A options, “throttled hidden” vs “first-play warm-up” patterns, slow-start vs steady speed, startup delay, stalls/decoder-drop printing, refused/failed runs, and the separate copy measurement |
+| Real headless **Chromium** (Playwright 1.56 / Chromium 1194), the real panel and env, real IndexedDB and WebM video | ✔ the measuring `<video>` alternates 2 px/transparent ↔ 160 px/opaque and is **removed afterwards**; hidden/visible/hidden-again runs read 1.00× with 0 skipped; total ≈ 20 s; no browser errors |
+| Real `Home` in a phone-sized Chromium viewport | ✔ re-run: lazy chunk fetched only on tap; expand/run/collapse; Reset row intact |
+| **A measurement bug found by this run and fixed before delivery** | My first draft forced the canvas copy to finish on every frame; that stalled the page so the *video itself* dropped frames (22 of 90). Even every 8th frame skipped 20 of 47. The delivered design measures playback with ordinary queued draws and the forced-finish copy **separately** (L-048) |
+| Not proven | Anything about iPhone Safari. The sandbox's software canvas is pathologically slow at pixel read-back (one forced copy took 3.7 s), so its copy/draw numbers say nothing about a phone — they only prove the tests respond to load and that the copy test is bounded (≤ 10 samples, time-limited) so it cannot hang a phone |
 
 ---
 
@@ -296,10 +312,12 @@ freecut/
 ### New in 1b.0 (things you should know)
 | ID | Note |
 |---|---|
-| **N30** | **Reduced verification for 1.3.0** (§2f): the full suite, ESLint, Prettier and the build were not run (no network in the build sandbox). Likeliest hiccup is **only** Prettier's `format` step, because the new files were formatted by hand. If *verify* or *e2e* is red for anything else, send a screenshot — it is a real finding. A clean first CI run closes this note. |
+| **N30** | **Reduced verification for 1.3.0 *and* 1.3.1** (§2f, §2g): the full suite, ESLint, Prettier and the build were not run (no network in the build sandbox). Likeliest hiccup is **only** Prettier's `format` step, because the new files were formatted by hand. If *verify* or *e2e* is red for anything else, send a screenshot — it is a real finding. A clean first CI run closes this note. |
 | **N31** | **What the Playback check cannot tell:** whether a tone was *audible with the silent switch on* (code can't hear — you tell me); desktop/headless numbers are not iPhone numbers; the green/amber/red limits (`LIMITS` in `playbackCheck.ts`) are my judgement — the raw numbers are always printed and are what matter. |
-| **N32** | **It measures your *largest imported video*** and briefly plays it **muted** (~2 s, plus a few seeks and 20 texture uploads). Audio decoding is skipped above 120 MB (it reads the whole file into memory). With no video imported, the speed rows say so — import one first. |
+| **N32** | **It measures your *largest imported video*** and plays it **muted four times (~3 s each)** plus a few seeks and uploads; during two of the runs the video **flashes in the top-left corner** (that is the A/B test, not a glitch). Audio decoding is skipped above 120 MB (it reads the whole file into memory). With no video imported the speed rows say so. **Import a heavy clip (1080p/4K, ideally HEVC from the Camera Roll) first** — your first run used a 1.1 MB, 576×640 clip, which proves little about real footage. |
 | **N33** | **No in-repo component/e2e test covers the new panel** (the real-browser run in §2f was a throwaway harness, not committed). Add a Playwright spec for *Me → Playback check* when real CI is available again. |
+| **N34** | **First device run (1.3.0) — one unexplained result.** Confirmed: audio unlock ✔, silent-switch fix ✔, sound decode ✔, WebGL 2 ✔, `requestVideoFrameCallback` ✔, seeks fast (74 ms), texture upload fast (1.0 ms), HEVC playable via `<video>`; WebCodecs rejects HEVC and has no audio decoder. **Unexplained: a muted *hidden* `<video>` played at 0.42× real time** (25 frames in 2 s, none skipped — so the clock itself crawled, not the picture dropping). Suspects: iOS throttling video it thinks is invisible; a first-play warm-up; Low Power Mode; the tiny clip's own encoding. The 1.3.1 A/B/A rows tell them apart. **1b.1 is blocked on this (D-033).** |
+| **N35** | **The 1.3.0 check had two weak measurements** (fixed in 1.3.1): it printed one 2-second average (can't separate slow start from slow crawl) and timed `drawImage` as 0.0 ms (queueing only). Treat those two 1.3.0 numbers as unproven. |
 
 ### Strategic risks (see `Roadmap.md`)
 Browser API support (WebCodecs, Web Audio start rules, texture upload) varies, **especially on iOS Safari** — Phase 1b starts with research on your iPhone; phone memory limits make proxies mandatory; on-device AI means large downloads; scope is large, so phases get split.
@@ -339,9 +357,11 @@ Browser API support (WebCodecs, Web Audio start rules, texture upload) varies, *
 | D-027 | 2026-10-20 | The player shows the **original photo** and a **real full-resolution video frame** (native `<video>`, one seek in flight, follows the playhead); the small poster stays underneath and the video is revealed only after a non-blank frame is verified | Done |
 | D-028 | 2026-10-20 | Posters 512 px / JPEG 0.82; filmstrip cells 128 px tall (new imports) | Done |
 | D-029 | 2026-10-20 | **Every update ends with one plain-language commit message in the chat — never in a file** (owner's request) | Standing rule |
-| D-030 | 2026-10-30 | **1b architecture (proposed):** sound = each clip decoded to an `AudioBuffer` and played through Web Audio, with `AudioContext.currentTime` as the **master clock**; picture = a **muted `<video>`** painted to a **2D canvas** against that clock; **WebGL (R-004) and WebCodecs (R-001) deferred** (effects / export) | Proposed — confirmed or changed by your Playback-check screenshot |
+| D-030 | 2026-10-30 | **1b architecture (proposed):** sound = each clip decoded to an `AudioBuffer` and played through Web Audio, with `AudioContext.currentTime` as the **master clock**; picture = a **muted `<video>`** painted to a **2D canvas** against that clock; **WebGL (R-004) and WebCodecs (R-001) deferred** (effects / export) | **Half confirmed (2026-10-31):** audio side confirmed on the device; picture side blocked by N34 |
 | D-031 | 2026-10-30 | **Probe before engine:** ship an in-app Playback check and measure on the owner's phone, with their own video, before building 1b.1 | Done (owner chose “Probe first”) |
 | D-032 | 2026-10-30 | **Audio starts synchronously inside the tap** (iOS gesture rule): nothing may be `await`ed before the `AudioContext` is created/resumed or `audioSession` is set; unit-tested (L-045) | Standing rule |
+| D-033 | 2026-10-31 | **Do not start 1b.1 until the A/B/A re-probe explains the muted-video speed (N34).** If a *visible* video plays at 1.0× the picture element simply stays on screen; if nothing plays in real time the picture must be driven by seeking (as the 1.2.3 Stage already does) instead of playing | Standing — until the re-run |
+| D-034 | 2026-10-31 | **Measure without disturbing:** playback health is judged with ordinary queued canvas draws; the forced-finish copy cost is measured separately and sparsely (L-048) | Done in 1.3.1 |
 
 ---
 
@@ -356,6 +376,7 @@ Browser API support (WebCodecs, Web Audio start rules, texture upload) varies, *
 | **1a.2 — real filmstrips** | **2026-10-20** | **`freecut-phase-1a-2.zip`** + `freecut-phase-1a-2-changes.zip` | §2d | N21 N24–N26 |
 | **1a.3 — full-quality player** | **2026-10-20** | **`freecut-phase-1a-3.zip`** + `freecut-phase-1a-3-changes.zip` | §2e | N27–N29 (retest ✔ 2026-10-30) |
 | **1b.0 — research + Playback check** | **2026-10-30** | **`freecut-phase-1b-0.zip`** + `freecut-phase-1b-0-changes.zip` | **§2f (reduced)** | **N30–N33** · N26 N28 (no sound/real playing yet) |
+| **1b.0.1 — A/B/A re-probe** | **2026-10-31** | **`freecut-phase-1b-0-1.zip`** + `freecut-phase-1b-0-1-changes.zip` | **§2g (reduced)** | **N34 N35** · N30 |
 
 ---
 
@@ -369,18 +390,39 @@ Unchanged: each phase ships the full zip (source only), updated docs, a **verifi
 
 ## 10. Review script — **iPhone Safari first**
 
-### Now (1.3.0, ≈ 5 min): run the Playback check on your iPhone
+### Now (1.3.1, ≈ 8 min): run the sharper Playback check on your iPhone
 
-You need: a video already imported — ideally your **biggest typical clip** (1–2 min, 4K/HEVC if you have one), because the check measures the largest video in the project.
+**Before you start:** (1) switch **Low Power Mode OFF** (Settings → Battery; the battery icon must not be yellow) — it can slow video; (2) **import a heavy video** — ideally a 20–60 s clip straight from the Camera Roll in 1080p or 4K (HEVC is perfect). The check measures your *largest* imported video, and your last clip was only 1.1 MB.
 
 | # | Do | Expect / tell me |
 |---|---|---|
-| P1 | **Me** tab | Shows **v1.3.0** (if not: fully close and reopen the tab/app twice) |
-| P2 | Make sure your video is imported (**Media → Import**). Then **Me → Playback check** | A panel opens with **Run check** and two tone buttons |
-| P3 | Tap **Run check** and **stay on this screen** for ~20 seconds | Rows fill in one by one; the button changes to **Run again**. **Screenshot the whole list** (scroll down for a second screenshot), or tap **Copy report** and paste it into the chat. Red/amber rows are *information*, not failures of the app — I need them either way |
-| P4 | Turn the **silent switch ON** (side switch, orange showing). Tap **Web Audio tone**, then **Audio tag tone** | Tell me for each: **heard it** or **silent**. Then switch silent **OFF** and tell me if both play |
-| P5 | Tell me your **iPhone model** and **iOS version** (Settings → General → About), and whether you used **Safari or the Home Screen app** | The first row of the report prints this too |
-| P6 | GitHub → your repo → **Actions** | The latest run: *verify* ✔, *e2e chromium* ✔, *e2e webkit* ✔. If anything is red, screenshot it — see N30 (a red *format* step alone is cosmetic) |
+| P1 | **Me** tab | Shows **v1.3.1** (if not: fully close and reopen the tab/app twice) |
+| P2 | **Me → Playback check → Run check**, and **watch the top-left corner** | ~30 seconds. A small video thumbnail should **flash in the top-left corner twice** (about 3 s each) — that is the test, not a glitch. The button ends as **Run again** |
+| P3 | **Screenshot the whole list** (scroll for a second screenshot), or tap **Copy report** and paste it here | I need the four **Playing …** rows most: *hidden*, *visible*, *hidden again*, *visible + copy to canvas* |
+| P4 | Tap **Run again** once more, straight away, and send that report too | Shows whether the *first* play is slower than later ones |
+| P5 | Tell me: did the **silent switch** sit ON when you tried the tones last time? And is **Low Power Mode** off now? | Two yes/no answers |
+| P6 | GitHub → **Actions** | Latest run: *verify* ✔, *e2e chromium* ✔, *e2e webkit* ✔; a red **format** step alone is cosmetic (N30) |
+
+### First device run (1.3.0 report, 2026-10-31) — for the record
+iPhone, **iOS 16.7**, Safari 16.6 UA, opened as a **Home Screen app**, 375×812 @3×. Test clip: a 1.1 MB, 576×640, 24 s `.mp4` (the largest video in the project).
+
+| Row | Result |
+|---|---|
+| WebGL | ✔ WebGL 2, largest texture 16384 px |
+| Web Audio unlock | ✔ running right after the tap, 48000 Hz |
+| Silent-switch fix | ✔ `navigator.audioSession` present, reads back “playback” |
+| Element volume | ✔ a set volume reads back 0.5 (loudness not tested; contradicts the old docs) |
+| Plays video / audio (`canPlayType`) | H.264 ✔ HEVC ✔ MOV ~ VP9 ✘ AV1 ✘ · AAC ✔ MP3 ~ WAV ~ Opus ✘ FLAC ~ |
+| WebCodecs | VideoDecoder ✔ VideoEncoder ✔ · AudioDecoder ✘ AudioEncoder ✘ |
+| WebCodecs video decode | H.264 1080p ✔ · **HEVC 1080p ✘ · HEVC 4K ✘ (“Config is not valid”)** · VP9 ✔ · AV1 ✘ |
+| Frame callback | ✔ `requestVideoFrameCallback` exists |
+| Decode its sound | ✔ 24.3 s, 2 ch, **66 ms** |
+| Open the video | ✔ 576×640, 24.4 s |
+| **Playing smoothly** | **✘ 25 frames in 2.0 s (≈ 13 fps), video clock ran at 0.42× real time, 0 of 25 skipped** ← N34 |
+| Copy to canvas | “0.0 ms” — **meaningless** (queueing only; N35) |
+| Scrubbing | ✔ median 74 ms, slowest 116 ms |
+| Upload to WebGL | ✔ median 1.0 ms |
+| Test tones | both made a sound (silent-switch position not stated) |
 
 ### Retest for 1.2.3 — ✔ passed (you, 2026-10-30); kept for the record
 
@@ -424,7 +466,7 @@ You need: the site open on your phone, a few **photos and videos in your Photos 
 
 ## 11. Behaviour changes vs v1.1.0 (everything you'll notice)
 
-**Since 1.3.0:** the only visible change is a new row, **Me → Playback check**. Editing, playback and import behave exactly as in 1.2.3.
+**Since 1.3.0:** the only visible change is a new row, **Me → Playback check** (in 1.3.1 its video briefly flashes in the top-left corner while it runs). Editing, playback and import behave exactly as in 1.2.3.
 
 1. **The editor opens paused at 00:00:00:00** (was: playing from 00:00:02:45).
 2. **Import works.** The Import buttons (toolbar, sidebar, the phone sheet) open your file picker; desktop also accepts drag-and-drop.

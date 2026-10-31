@@ -10,7 +10,7 @@ import {
 import { createPlaybackEnv } from "../diagnostics/playbackCheckEnv";
 import { useProject } from "../store/ProjectContext";
 
-const INTRO = `Finds out what this phone can do before playback is built. It takes about 20 seconds and uses your own imported video for the speed tests. For the tone tests, switch the silent switch on.`;
+const INTRO = `Finds out what this phone can do before playback is built. It takes about 30 seconds and uses your own imported video for the speed tests — you will see it flash in the top-left corner for a few seconds. For the tone tests, switch the silent switch on.`;
 
 /** Replace a row with the same id (a re-run, a repeated tone) or append a new one. */
 function upsert(rows: CheckRow[], row: CheckRow): CheckRow[] {
