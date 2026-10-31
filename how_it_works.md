@@ -1,6 +1,6 @@
 # How FreeCut works
 
-> **Scope:** the mechanics of the app **as built at v1.2.3 (Phase 1a + iPhone thumbnail fix + real filmstrips + full-quality player)**. Verified by reading the source, by 315 unit/component tests, by Chromium end-to-end runs with real video/audio/photo files, and (for the Phase 0 base) by hand on iPhone Safari.
+> **Scope:** the mechanics of the app **as built at v1.3.0 (Phase 1a + iPhone thumbnail fix + real filmstrips + full-quality player + the 1b.0 Playback check)**. Verified by reading the source, by 315 unit/component tests (v1.2.3; the 56 added in 1b.0 were run in a stand-in runner — see `Handover.md §2f`), by Chromium end-to-end runs with real video/audio/photo files, and (for the Phase 0 base) by hand on iPhone Safari.
 > This file is **rewritten as the architecture changes** — every phase updates the relevant sections, so it always describes what is actually in the zip, not what we hope for.
 > Companions: `Handover.md` (status, issues, review script), `Roadmap.md` (plan), `Knowledge_Contribution.md` (how to contribute, learnings).
 
@@ -30,7 +30,7 @@ index.html ─► src/main.tsx ─► <ErrorBoundary><App/></ErrorBoundary>
 - **One component tree, two layouts.** Panels are shared; the shell around them differs for desktop vs phone.
 - **Local-first, no backend.** No network calls at runtime. Storage is IndexedDB: the project **and** imported media files (as Blobs). OPFS stays an unused skeleton (see §5).
 
-### Source map (v1.2.3)
+### Source map (v1.3.0)
 
 | Folder | What lives there |
 |---|---|
@@ -41,7 +41,8 @@ index.html ─► src/main.tsx ─► <ErrorBoundary><App/></ErrorBoundary>
 | `src/media/` | **Phase 1a import pipeline:** `classify`, `probe`, `poster` (video → picture logic), `thumbnail` (posters + waveform), `filmstrip` + `filmstripQueue` + `useFilmstrip` (timeline filmstrips), `ingest`, `importer`, `importStore`, `mediaStore` (+ orphan sweep), `useMediaUrl` |
 | `src/engine/` | Playback clock (`clock`, `playback`) — becomes the real engine from Phase 1 |
 | `src/editor/` | Editor shell + panels; `timeline/` (geometry, ruler, clips, desktop + phone timelines); `footage/` (generated SVG scenes) |
-| `src/home/` | Home screen, hero scenes, hero-pick logic |
+| `src/home/` | Home screen, hero scenes, hero-pick logic, and the lazily loaded **`PlaybackCheckPanel`** (Me tab) |
+| `src/diagnostics/` | **Phase 1b.0 Playback check:** `playbackCheck` (pure: types, grading, the runner — all browser access goes through an injected `PlaybackEnv`), `playbackCheckEnv` (the real browser calls), `toneWav` (test-tone generator) |
 | `src/ui/` | Shared controls (`Slider`, `NumberBox`, …), custom icons, `BrandMark` |
 | `src/styles/` | Real CSS files: `editor`, `home`, `scenes`, `transitions`, `app` |
 | `src/test/` | Test setup + `harness` (store + providers for component tests) |
@@ -247,6 +248,7 @@ Shared controls (`ui/controls.tsx`): **`Slider` is now keyboard-operable** (`tab
 - **A fresh look on every open** (`heroPick.ts`): a module-level pick `{scene, headline}` in `localStorage["freecut.home.pick"]`; `rollIndex` never repeats the last index; re-rolls at load and when the page returns after being hidden ≥ 20 s; `useOpenPick()` (`useSyncExternalStore`) reports `fresh` so the swap fades in.
 - **Hero scenes** (`HeroScenes.tsx`): six SVG scenes on a 400×300 canvas, ids from `useId`; ambient motion only inside `.hm-live`, transform/opacity only, off under reduced motion. Project thumbnails always use `dusk` (it matches the demo clip).
 - `BrandMark` (one component, unique mask id per instance) is used by both Home and the editor.
+- **Playback check (1b.0, Me tab → “Playback check”)** — a lazily loaded panel (`PlaybackCheckPanel`; its chunk is only fetched when the row is tapped) that reports what *this* phone's browser can do before the playback engine is built. Its buttons call straight into `diagnostics/playbackCheck.ts` from the tap handler, because **iOS only unlocks audio from inside the tap**: `runPlaybackCheck` starts the `AudioContext` and sets `navigator.audioSession.type = "playback"` synchronously before any `await`. The runner is pure and takes a `PlaybackEnv` (D-023 again); `playbackCheckEnv.ts` is the real browser. It reports: Web Audio unlock, the silent-switch fix, whether element volume works, which video/audio codecs `<video>` and WebCodecs accept (incl. HEVC), whether `requestVideoFrameCallback` exists, and — on the **largest video you imported** — audio decode time, smooth playback (video clock speed **and skipped frames**), `drawImage(video)` cost while playing, seek latency and `texImage2D(video)` cost. Every browser call has a time limit and each section is isolated, so a hang or crash becomes a red row, never a frozen or empty report. Rows can be copied as text or screenshotted; two buttons play a test tone through Web Audio and through an `<audio>` tag to hear with the silent switch on.
 
 ---
 
@@ -276,8 +278,8 @@ Shared controls (`ui/controls.tsx`): **`Slider` is now keyboard-operable** (`tab
 
 | Today | Becomes | Phase |
 |---|---|---|
-| Posters instead of playing video; fake meter; one filmstrip image per clip | Decoded frames on a WebGL2 canvas; per-frame thumbnails; real levels | 1b |
-| `rAF` frame counter | Audio-driven master clock, imperative playhead | 1b |
+| Posters instead of playing video; fake meter; one filmstrip image per clip | A muted `<video>` painted to a **2D canvas** (WebGL2 deferred — R-004); sound from Web Audio buffers (R-005); real levels | 1b.1 |
+| `rAF` frame counter | Audio-driven master clock (`AudioContext.currentTime`), imperative playhead | 1b.1 |
 | Whole-file blobs in IndexedDB | Proxies for heavy files; (maybe) OPFS where it's reliable | 1c |
 | Selection/props for one clip | Multi-select, move/trim/split/ripple, snapping | 2 |
 | `transform.zoom` (UI semantic) | Real transform/keyframes (schema v2 migration) | 3 |

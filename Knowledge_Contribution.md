@@ -259,11 +259,11 @@ Add to the right section below. Keep entries short, dated, and evidence-based. *
 
 | ID | Topic | Needed by | Question |
 |---|---|---|---|
-| R-001 | WebCodecs (decode + encode) | Phase 1 / 7 | Which codecs/profiles per browser incl. iOS Safari? Hardware-accelerated? Audio encode support? |
+| R-001 | WebCodecs (decode + encode) | **Researched in 1b.0** (see B2b) | Result: video decode exists on iOS 16.4+, HEVC unproven there, audio codecs only in newer Safari → not the base for 1b; revisit for export. Still open: real answers on the owner's phone (Playback check) |
 | R-002 | OPFS + IndexedDB limits | **Researched in Phase 1a** (see B2b) | Result: IndexedDB Blobs chosen for Phase 1; OPFS later. Still open: real quota numbers on target iPhones, large-file (1 GB+) behaviour, `persist()` behaviour |
 | R-003 | Demux/mux libraries | Phase 1 / 7 | Which MP4/WebM/MOV demuxers & muxers are small, maintained, permissively licensed? Fragmented MP4 for streaming export? |
-| R-004 | WebGL2 compositing at 4K | Phase 1 / 4 | Texture upload cost from `VideoFrame`; multi-layer budget on phones; context-loss handling |
-| R-005 | Web Audio as master clock | Phase 1 | Drift handling; `AudioContext` start restrictions on iOS; latency compensation |
+| R-004 | WebGL2 compositing at 4K | **Partly researched in 1b.0** (see B2b) | Result: video → texture uploads on iOS have a history of slow paths → 2D canvas first. Still open: real cost on the owner's phone (Playback check), multi-layer budget, context-loss handling |
+| R-005 | Web Audio as master clock | **Partly researched in 1b.0** (see B2b) | Result: gesture-start rule, silent-switch fix, element volume ignored on iOS. Still open: drift handling and latency compensation (1b.1) |
 | R-006 | File System Access / Web Share | Phase 7 | Support matrix; fallbacks for save/share |
 | R-007 | MediaRecorder codecs | Phase 6 / 9 | Per-browser mime types for audio/video capture; variable-bitrate quirks |
 | R-008 | On-device speech-to-text | Phase 5 | Model options, size, languages, WebGPU vs WASM speed, licence |
@@ -283,6 +283,34 @@ Add to the right section below. Keep entries short, dated, and evidence-based. *
 - **Licence/patents:** n/a. **Prototype:** IndexedDB Blob writes measured at 1–15 ms for a 65 KB file in Chromium; IndexedDB already proven on the owner's iPhone for the project record (Phase 0 review).
 - **Decision:** Phase 1 stores media as **IndexedDB Blobs** behind `media/mediaStore.ts` (works on every target browser today). OPFS (with a Worker write path) is a later optimisation if big files demand it (Phase 1c proxies). A visible iPhone tip recommends installing to the Home Screen.
 - **Confidence:** the Safari-26 / 7-day claims are *reported*, not tested by us. Re-verify on caniuse/MDN before relying on either.
+
+#### R-001 — WebCodecs on iPhone Safari   (2026-10-30 · web search; **not verified on a device** — the Playback check does that)
+- **Question:** can we decode imported iPhone video (HEVC) and its audio with WebCodecs, on iOS 16 (the owner's iPhone X cannot go higher)?
+- **Video decode:** reported in Safari since **16.4** (MDN compatibility data; a news item on Apple's WebCodecs support). So `VideoDecoder` should exist on the owner's phone if it runs 16.4+.
+- **HEVC:** an Apple Developer Forums thread (`developer.apple.com/forums/thread/729464`, "HEVC On Web Codecs") reports an HEVC decoder configuration being **rejected on 16.4**; the thread did not give a resolution we could rely on. iPhones record HEVC by default, so this is the case that matters.
+- **Audio:** MDN's "Codec selection" page says AAC encoding is supported only on Safari versions that have `AudioEncoder`, **Safari 26+**. We assume `AudioDecoder` arrived in the same release; *not confirmed*.
+- **Licence/patents:** HEVC is patent-encumbered; decoding goes through the OS/browser, we ship no codec.
+- **Prototype result:** none on a phone yet. `diagnostics/playbackCheck` now prints `VideoDecoder.isConfigSupported` for H.264/HEVC/VP9/AV1 and `AudioDecoder` for AAC/Opus, including any rejection message.
+- **Recommendation:** do **not** build 1b on WebCodecs. Use native `<video>` (the browser's own HEVC/H.264 path) for pictures and Web Audio buffers for sound; keep WebCodecs behind feature detection for export (E1).
+- **Confidence:** medium (forum thread + compatibility tables). Settled only by the owner's Playback-check screenshot.
+
+#### R-004 — Video → canvas / WebGL texture cost on iOS   (2026-10-30 · web search; **not verified on a device**)
+- **Question:** how expensive is putting a decoded video frame into a canvas/texture each frame on an A11-class phone?
+- **Reported:** WebKit bug 216250 (iOS 14 beta) describes video-to-texture uploads **falling off the GPU path into slow software conversion**; bug 226830 reports `texImage2D` from a video being slow, with a figure of **about 7 ms per upload on an iPhone 12 Pro** (an iPhone X is slower); bug 235845 shows `requestVideoFrameCallback` support landing in early 2022 (exact Safari version not confirmed by us).
+- **Limits:** a 30 fps frame budget is 33 ms for decode, copy, compositing and UI.
+- **Prototype result:** none on a phone yet. The Playback check measures `drawImage(video)` while playing, `texImage2D(video)` while playing, seek-to-`seeked` latency and **skipped frames**, on the owner's own largest imported video. (In headless Chromium with software decoding: copies ≈ 0.6 ms, uploads ≈ 0.4 ms — meaningless for iOS, but proves the measurement works.)
+- **Recommendation:** composite on a **2D canvas** in 1b; defer WebGL until effects need it (Phase 4) and re-measure then. Use `requestVideoFrameCallback` where present.
+- **Confidence:** medium-low (old bug reports; numbers from a different phone).
+
+#### R-005 — Web Audio as the master clock on iOS   (2026-10-30 · web search; **not verified on a device**)
+- **Question:** what must we do so sound starts, obeys our mixer and is not muted by the side switch?
+- **Start rule:** reported that iOS only lets an `AudioContext` start from inside a direct user gesture, so it must be created/resumed **synchronously** in the Play tap.
+- **Silent switch:** reported that the ringer switch **mutes Web Audio but not a `<video>` with sound**. Setting `navigator.audioSession.type = "playback"` is the documented fix; caniuse/MDN data say it exists from **iOS 16.4**. Before that, the known workaround is looping a silent `<audio>` element.
+- **Element volume:** Apple's documentation says iOS does **not let JavaScript set media-element volume**, and a Stack Overflow answer plus WebKit bug 151589 (open since 2015) report that routing a media element through a `GainNode` has been broken/distorted since iOS 13. So per-clip volume and track mute cannot ride on the `<video>`.
+- **Prototype result:** none on a phone yet. The Playback check tests unlock-after-tap, `audioSession` presence and read-back, element-volume write-back, `decodeAudioData` of the owner's own video, and two test tones (Web Audio vs `<audio>`) to hear with the silent switch on.
+- **Recommendation:** decode each clip's sound to an `AudioBuffer` and play it through Web Audio (reliable per-clip gain, mute, `AnalyserNode` meter); make `AudioContext.currentTime` the master clock; draw the muted `<video>` against it. Cap decoding by file size (as the waveform code does) and handle long files with proxies (1c).
+- **Open:** drift correction and latency compensation — measure in 1b.1.
+- **Confidence:** medium (several independent sources agree on the gesture and silent-switch rules; the volume/GainNode claim rests on old reports).
 
 ---
 
@@ -419,6 +447,15 @@ Add to the right section below. Keep entries short, dated, and evidence-based. *
 
 ### L-044 — Owner's preference: one plain commit message per update   (2026-10-20 · process)
 **Rule:** end every delivery with a single plain-language commit message in the chat — a short summary line a non-developer can paste, never inside a file. (See `A4`.)
+
+### L-045 — On iOS, audio must start synchronously inside the tap   (2026-10-30 · audio/iOS · reported; unit-tested ordering)
+Create/`resume()` the `AudioContext` and set `navigator.audioSession.type = "playback"` in the **first statements of the tap handler, before any `await`** — one `await` earlier and iOS may leave the context suspended (a silent first press). The Playback check does this and a unit test asserts the call order (and was mutation-checked: inserting an `await` fails it). Desktop Chrome forgives late starts, so a green desktop test proves nothing here.
+
+### L-046 — Measure what a steady clock hides   (2026-10-30 · testing/measurement · verified)
+A video clock can keep perfect real time while the picture stutters, because the browser drops frames to keep up. "Clock ran at 1.00×" alone graded a 24-fps-for-30-fps run as fine. Count **skipped frames from the frame timestamps** too (`skippedFrames`); in headless Chromium it read 0% on a light 360p clip and 19% on a heavy 720p one, so it tracks real load.
+
+### L-047 — Reading the tool's own output beats trusting that it ran   (2026-10-30 · process · verified)
+When the real toolchain isn't installable (no network), say exactly what was and wasn't run, and replace what you can with something real: a stand-in test runner, a strict `tsc` against the project's real modules, and a headless-browser end-to-end of the real code. A test harness bug (the first browser run said "no video" because the harness never re-rendered) looks exactly like an app bug until you read the output carefully.
 
 ---
 

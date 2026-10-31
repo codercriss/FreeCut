@@ -746,3 +746,88 @@
 .hm-list li.hm-li-action {
   gap: 12px;
 }
+
+/* Phase 1b.0: the "Playback check" panel under the Me list (a device report to screenshot or copy). */
+.hm-check {
+  margin-top: 14px;
+  padding: 14px 16px 16px;
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.hm-check-intro {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--dim);
+}
+.hm-check-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.hm-check-btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--field);
+  border: 0;
+  border-radius: 999px;
+  padding: 9px 14px;
+  cursor: pointer;
+}
+.hm-check-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.hm-check-primary {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+.hm-check-note {
+  font-size: 12.5px;
+  color: var(--dim);
+}
+.hm-check-rows {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.hm-check-row {
+  display: flex;
+  gap: 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.hm-check-mark {
+  flex: none;
+  width: 18px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--faint);
+}
+.hm-check-row strong {
+  display: block;
+  font-weight: 600;
+}
+.hm-check-detail {
+  display: block;
+  color: var(--dim);
+  overflow-wrap: anywhere;
+}
+.hm-check-row.ok .hm-check-mark {
+  color: #4ade80;
+}
+.hm-check-row.warn .hm-check-mark {
+  color: #facc15;
+}
+.hm-check-row.fail .hm-check-mark {
+  color: #f87171;
+}

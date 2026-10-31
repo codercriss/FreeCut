@@ -1,4 +1,5 @@
 import {
+  Activity,
   Camera,
   Eraser,
   Film,
@@ -16,7 +17,7 @@ import {
   Wand2,
   WifiOff,
 } from "lucide-react";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { BRAND_NAME } from "../app/brand";
 import type { LaunchOptions } from "../app/NavContext";
 import { projectDuration } from "../model/selectors";
@@ -29,6 +30,9 @@ import { resetDemoProject } from "../app/actions";
 import "../styles/home.css";
 import { Scene } from "./HeroScenes";
 import { useOpenPick } from "./heroPick";
+
+// The Phase 1b.0 device check is only fetched when someone opens it from the Me tab.
+const PlaybackCheckPanel = lazy(() => import("./PlaybackCheckPanel"));
 
 /* ════════════════════════════════════════════════════════════════════
    Startup / home screen. Two layouts:
@@ -171,6 +175,7 @@ const TABS = [
 
 function MobileHome({ onOpen }: { onOpen: OpenFn }) {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("edit");
+  const [checkOpen, setCheckOpen] = useState(false);
   const [pick, fresh] = useOpenPick();
   return (
     <div className="hm hm-m">
@@ -286,10 +291,25 @@ function MobileHome({ onOpen }: { onOpen: OpenFn }) {
                   <em>v{__APP_VERSION__}</em>
                 </li>
                 <li className="hm-li-action">
+                  <Activity size={18} strokeWidth={1.9} />
+                  <button
+                    className="hm-reset"
+                    onClick={() => setCheckOpen((open) => !open)}
+                    aria-expanded={checkOpen}
+                  >
+                    Playback check
+                  </button>
+                </li>
+                <li className="hm-li-action">
                   <RotateCcw size={18} strokeWidth={1.9} />
                   <ResetDemoButton className="hm-reset" />
                 </li>
               </ul>
+              {checkOpen && (
+                <Suspense fallback={null}>
+                  <PlaybackCheckPanel />
+                </Suspense>
+              )}
               <div className="hm-end" />
             </div>
           )}
