@@ -5,10 +5,10 @@
 | | |
 |---|---|
 | **Project** | FreeCut — browser-based video editor (PWA), aiming to be a free CapCut alternative |
-| **Version** | **v1.3.1** — Phase 1b **step 0, patch 1: the A/B/A playback re-probe** (1.3.0 = research + the first Playback check · 1.2.3 = full-quality player · 1.2.2 = real filmstrips · 1.2.1 = iPhone thumbnail fix · 1.2.0 = media import & library) |
-| **Delivered** | 2026-10-31 · `freecut-phase-1b-0-1.zip` (full) and `freecut-phase-1b-0-1-changes.zip` (only what changed since 1.3.0 — see `CHANGES.md`) |
-| **Status** | Your **1.3.0 report is in** (§10 “First device run”): the audio side is confirmed on your iPhone, but one result is unexplained — a muted, hidden `<video>` ran at **0.42× real time** (N34). 1.3.1 adds a sharper A/B/A test to explain it — *needs one more run on your iPhone* (§10 top). ⚠ The full test suite could **not** be run again (no network in the build sandbox) — §2g, N30 |
-| **Next** | Send the re-run → I explain the playback-speed result → then I build 1b.1 (real playing with sound), 1c, Phase 2, thin export |
+| **Version** | **v1.4.0** — Phase 1b **step 1: real playback with sound** (1.3.1 = A/B/A re-probe · 1.3.0 = research + Playback check · 1.2.3 = full-quality player · 1.2.2 = real filmstrips · 1.2.1 = iPhone thumbnail fix · 1.2.0 = media import & library) |
+| **Delivered** | 2026-11-01 · `freecut-phase-1b-1.zip` (full) and `freecut-phase-1b-1-changes.zip` (only what changed since 1.3.1 — see `CHANGES.md`) |
+| **Status** | Your 1.3.1 re-run **solved the mystery** (the 0.42× was a first-play warm-up, not throttling). So **imported videos and audio now really play, with sound** (first cut). *Needs your phone test* (§10 top). ⚠ The full test suite could **not** be run again (no network in the build sandbox) — §2h, N30; the engine *was* exercised end-to-end in a real headless Chromium with real video and sound |
+| **Next** | Your phone test → 1b.2 (what your iPhone shows: likely pre-warming the next video at a cut, a heavier-clip check) → 1c (projects, proxies, sound for long files) → Phase 2 |
 
 ---
 
@@ -27,6 +27,8 @@ FreeCut is now an editor you can put **your own media** into. You can import vid
 **Honest caveat for this delivery:** the sandbox this was built in had **no network**, so I could not install the project's tools. The new code was checked with a strict TypeScript compile, 56 new tests run in a stand-in runner, and — more convincingly — the **real panel and the real Home screen were exercised in a real (headless) Chromium with real videos**. What was *not* run is listed in §2f. Please check the GitHub **Actions** tab after you upload; if only the *format* step is red, it is cosmetic (N30).
 
 **Update (1.3.1) — your report, and a sharper test.** Your first Playback-check run came back (kept in §10): the **audio side is solid** on your iPhone — sound starts from the tap, the silent-switch fix exists on your iOS, decoding your video's sound took 66 ms, and both test tones played. The research was also right that **WebCodecs can't decode HEVC** on your phone (and has no audio decoder), so playing iPhone clips stays with the browser's own `<video>`. **One result is a real problem:** a muted, hidden `<video>` played at only **0.42× real time** — and the design I proposed (D-030) draws exactly such a video to a canvas. I did not want to build the engine on a guess, and I found my own measurements were too weak to explain it (an average over 2 seconds can't tell a slow start from a slow crawl; the “copy to canvas 0.0 ms” only timed queueing; and your test clip was tiny, 1.1 MB). So **1.3.1 makes the check an A/B/A test** — the same video hidden, then visible as a small corner thumbnail, then hidden again, then visible with every frame painted to a canvas — and records a timeline, start-up delay, stalls and the decoder's own dropped-frame count, so the result itself names the cause. **Nothing you edit or play changed**; the video now briefly flashes in the top-left corner while the check runs.
+
+**Update (1.4.0) — it plays, with sound.** Your re-run explained the mystery. Playing the same video **hidden, visible, hidden again, and visible while painting every frame to a canvas** all ran at **1.0× real time** (0–1 % skipped frames, no stalls) — so the earlier 0.42× was a **warm-up on the very first play** (the picture takes ~0.2–0.3 s to start moving, longer the first time), not throttling and not a slow phone. The picture can therefore stay an ordinary on-screen video. **What I built (Phase 1b.1):** sound is decoded once and played through Web Audio, and the **audio clock now drives the playhead**; the on-screen video really plays (muted) and is nudged to stay in step; when you press Play on a video, a short hold waits for the picture to be genuinely moving and then sound and playhead start together; the **level meter is real**; muted tracks are silent; jumping while playing, running to the end, and replaying all work. **Safety nets:** if sound can't run (no Web Audio, a suspended phone audio session, a failed decode) the playhead just keeps going on the time clock — *the picture never waits for sound* — and sound joins the moment it can. **First-cut limits** (N36): a cut to a *different* video file shows the still poster for a moment; files over 60 MB are silent until 1c; speed changes also change pitch; no per-clip volume yet. It was exercised in a real (headless) Chromium with real video and sound — 41 checks, including a video that is slow to start, one that refuses to play, and Play/Pause mashing — and the real app's Play test, but **not on an iPhone**: that is your test (§10).
 
 **Working agreement added:** every update ends with **one plain commit message in the chat** (never in a file), written for you to paste.
 
@@ -155,6 +157,21 @@ Not proven by any of this: how your iPhone behaves. This Chromium cannot play H.
 
 ---
 
+#### 2h. Delivery 1.4.0 — what was and was **not** run  ⚠ reduced verification (third time)
+
+2026-11-01, again **without network access** (`npm ci` impossible), so N30 stays open. Unlike 1.3.x, this delivery changes the heart of the player, so more was done by other means:
+
+| Check | Result |
+|---|---|
+| `npm ci` → `npm run verify`, ESLint, Prettier `format:check`, `vite build`, the existing 315 tests and Playwright specs (incl. **`webkit-*`**) | ✖ **not run** (N30). The existing `App`/`Stage` unit tests were not run; the new code is additive in `StageVideo` (all new props default off) and falls back to the old behaviour where there is no Web Audio (jsdom) |
+| TypeScript, **strict**, the project's flags (global TS 6.0.3) on all new engine/diagnostics files **plus the real project modules they import**; `playback.tsx` and `Stage.tsx` against React/store type *stubs* with the real engine, model and DOM types; the real browser `AudioContext` checked structurally against the engine's `ContextLike` | ✔ clean. (Evidence the project's real TS 5.9 accepts the browser typings used: v1.3.1 — which uses them — built and deployed on Vercel, whose build runs `npm run typecheck`) |
+| New unit tests: **116** = engine **44** (`audioPlan` 10, `transport` 18, `audioEngine` 16) + diagnostics **72** — run in the **stand-in runner**, not real vitest | ✔ 116/116 |
+| **Real-browser engine suite** (Chromium 1194, headless): the **real** `PlaybackProvider` + `Transport` + `AudioEngine` + `Stage` + project store, a real VP9/Opus video with a 440 Hz tone and a separate 880 Hz audio clip, real IndexedDB | ✔ **41/41** — playhead starts moving **113 ms** after the tap; real speed (30 fps); picture within **0.057 s** of the playhead (mean +0.038 s); the video element is really playing (211/211 samples); sound present and starts **16 ms** from the playhead's first move; the second audio clip raises the level when it joins; Pause stops playhead *and* video; seek-while-playing lands on the new frame and the picture follows; stops by itself at the end; Play-at-end restarts; a 2× clip follows at 2.00×; muted tracks are silent but the playhead runs; **a video that is slow to start (600 ms) → the playhead waits for it and sound starts within 33 ms of it; a video that refuses to play → the clock gives up after ~1.5 s, sound still plays, no errors; rapid Play/Pause mashing ends consistent; Play from the middle**; **fallbacks:** no Web Audio at all, and an audio context that never runs — playhead and picture still run on the time clock; no browser errors anywhere |
+| **Real app** (`main.tsx` bundled with the real lazy editor, desktop 1280×800 and Pixel 7 phone layouts): the existing e2e Play scenario (paused at 00:00:00:00 → Play 0.7 s → Pause → > 20 frames → stays put → second Play continues), meter drawn | ✔ 4 consecutive runs pass; phone layout **43–45 frames in ~0.7 s** (the correct rate at 60 fps) every time |
+| **Control:** the same script against the *previous* version's build | Showed the same odd desktop numbers in this single-core software-rendered sandbox (L-052) — they are the sandbox, not the change; both versions advance at 59–60 fps whenever the playhead moves |
+| **Bugs found by this verification and fixed before delivery** | (1) the first transport design held the playhead for sound — fragile under load → redesigned (L-051); (2) frame-timestamp vs `performance.now()` mismatch (negative first offset); (3) stall watchdog missed a clock that starts then freezes; (4) a clip at source time 0 never revealed its video while playing; (5) a different video mounting mid-play could flash a wrong frame (L-053) |
+| Not proven | **Anything on an iPhone** (your test, §10); `webkit-*`; clips over 60 MB / long clips; 60 s drift; Bluetooth output; CI. No component/e2e test for the *playing* path is committed — the real-browser suite above was a throwaway harness (N39) |
+
 ## 3. Repository map
 
 ```
@@ -173,7 +190,7 @@ freecut/
    ├─ store/     createStore · projectStore (history) · commands · editorStore · prefsStore · singleton · ProjectContext
    ├─ storage/   idb (DB v2) · projectRepo · autosave · opfs (skeleton)
    ├─ media/     classify · probe · thumbnail · ingest · importer · importStore · mediaStore · useMediaUrl          ← new in 1a
-   ├─ engine/    clock · playback
+   ├─ engine/    playback (provider) · transport · audioEngine · audioEngineEnv · audioPlan · videoSync · clock   ← 1b.1
    ├─ editor/    Editor · DesktopApp · MobileApp · TitleBar · MediaPanel · PlayerPanel · PropertiesPanel · ImportToast · shortcuts · saveLabel
    │  ├─ timeline/  geometry · Clips · TrackParts · ToggleButtons · Timeline · MobileTimeline
    │  └─ footage/   scenes (generated SVG demo art)
@@ -206,7 +223,7 @@ freecut/
 | Library: search, sort, duplicate detection, relink | ✖ (1c) |
 | Add to timeline (+ button or ⋯ menu); photos default to 5 s | ✔ **new** |
 | Imported clips on the timeline with poster filmstrip; poster shown in the player | ✔ **new** |
-| **Playing** imported video / audio (picture + sound) | ✖ **Phase 1b** |
+| **Playing** imported video / audio (picture + sound) | ✔ **new in 1.4.0 (first cut)** — sound via Web Audio (audio clock = master), picture = the on-screen `<video>` kept in step; *iPhone unverified — see N36* |
 | Waveform for audio *files* (not for audio inside videos) | ✔ / ✖ |
 | iPhone "add to Home Screen" tip | ✔ **new** |
 | Orphan cleanup of unused media | ✔ **new** (startup + reset) |
@@ -227,7 +244,7 @@ freecut/
 
 | Feature | Status |
 |---|---|
-| Play / pause / seek / scrub / timecode (clock only; moves the playhead) | ✔ |
+| Play / pause / seek / scrub / timecode (drives sound and picture; falls back to a time clock if sound can't run) | ✔ |
 | Timeline zoom, ruler, playhead, clips, phone scroll-sync + pinch | ✔ **M** |
 | Track mute | ✔ **M** (nothing audible yet) |
 | Clip selection → Properties; filter/zoom/opacity/sections/reset/delete-effect | ✔ **M** (values not applied to pixels) |
@@ -235,7 +252,7 @@ freecut/
 | Keyboard-operable sliders | ✔ |
 | Split · Delete · Record · Menu · Layout · Shortcut · Export · Fit · Fullscreen · Original | ◐ buttons only |
 | Position X/Y, Rotate entry; blend dropdown; keyframes; other Properties tabs | ◐ |
-| Level meter | ◐ sine-wave fake |
+| Level meter | ✔ **real** (from the sound engine; flat when there is no sound — the demo project has none) |
 | Effects, text, stickers, transitions, export | ✖ |
 
 **Home**
@@ -275,7 +292,7 @@ freecut/
 ### Still open
 | ID | Issue | Planned |
 |---|---|---|
-| K3 | `rAF` frame counter re-renders ~60×/s while *playing*; no audio sync | 1b |
+| K3 | The playhead is still a React state updated every frame (it now follows the **audio clock** — 1b.1); an imperative playhead remains | later |
 | K4 | **Mostly resolved (1.2.2):** imported videos get a real per-moment filmstrip. The *demo* clip still uses 90 SVG cells (it's demo art), and the **player still shows one still image** | player: 1b |
 | K9 | Tablet / portrait-tablet gets the phone layout | Phase 10 |
 | N1 | **WebKit (Safari) e2e unrun by me**; CI runs it | check the Actions tab |
@@ -303,21 +320,25 @@ freecut/
 | N24 | **A flaky test seen once:** the App smoke test failed once under full-suite load right after a code change, then passed in 9 consecutive runs (alone and full). Not reproduced; if it appears again, capture the assertion and send it to me. |
 | N25 | **Filmstrip limits:** ~1 frame per second (max 24 per video), so zooming far in repeats frames; built lazily on first display, **one video at a time**, taking a few seconds on a phone; a long video may take longer. If it can't be built (reason is logged in the console) the timeline keeps the single poster. The sprite is small (tens of KB) and protected from the orphan sweep. |
 | N27 | **Quality of the preview depends on the browser's decoder:** the video frame is drawn by the browser's own `<video>`; if it can't be verified as a real (non-blank) picture it stays hidden and the small poster remains visible. Very large photos (e.g. 48 MP) are decoded in full — heavy on older iPhones; if one fails to load you'll see the poster instead. |
-| N28 | While Play is on, the frame is re-seeked as fast as the phone allows (typically a few frames a second) — it will look like a slideshow, not smooth video, until Phase 1b. |
+| N28 | ~~While Play is on, the frame is re-seeked…like a slideshow~~ **Resolved in 1.4.0:** while playing, the video really plays (muted) and follows the playhead; seeking is only used when paused or for large drift. |
 | N29 | **Existing imports keep their old thumbnail/filmstrip size** (thumbnails 320 px, filmstrip cells 96 px). New imports are sharper. To refresh an old one: delete it from the library and re-import (undo-able until you reload). |
-| N26 | **Updated (1.2.3):** the player now shows a **real full-resolution frame that follows the playhead** (silent, one seek at a time). There is still **no sound and no real playing** — pressing Play moves the playhead and the picture catches up as the phone allows. Proper playback with audio is Phase 1b. |
+| N26 | ~~There is still no sound and no real playing~~ **Resolved in 1.4.0** (first cut — N36 lists what is still missing). |
 | N22 | Thumbnail creation now *plays the video muted for a split second* (inside an invisible 2 px element). It's silent and should be invisible; it exists because iOS may need it to decode a frame. |
 | N23 | When no poster exists, the player/tile use the browser's own `<video>` first frame (reads the file's blob; fine for short clips, to be reviewed for big files in 1c). |
 
 ### New in 1b.0 (things you should know)
 | ID | Note |
 |---|---|
-| **N30** | **Reduced verification for 1.3.0 *and* 1.3.1** (§2f, §2g): the full suite, ESLint, Prettier and the build were not run (no network in the build sandbox). Likeliest hiccup is **only** Prettier's `format` step, because the new files were formatted by hand. If *verify* or *e2e* is red for anything else, send a screenshot — it is a real finding. A clean first CI run closes this note. |
+| **N30** | **Reduced verification for 1.3.0, 1.3.1 *and* 1.4.0** (§2f, §2g, §2h): the full suite, ESLint, Prettier and the build were not run (no network in the build sandbox). Likeliest hiccups: Prettier's `format` step (hand-formatted), and the **existing App/Stage/e2e tests** touched indirectly by the playback change (additive and fallback-safe by design, but not run). If *verify* or *e2e* is red for anything, send a screenshot — it is a real finding. A clean first CI run closes this note. |
 | **N31** | **What the Playback check cannot tell:** whether a tone was *audible with the silent switch on* (code can't hear — you tell me); desktop/headless numbers are not iPhone numbers; the green/amber/red limits (`LIMITS` in `playbackCheck.ts`) are my judgement — the raw numbers are always printed and are what matter. |
 | **N32** | **It measures your *largest imported video*** and plays it **muted four times (~3 s each)** plus a few seeks and uploads; during two of the runs the video **flashes in the top-left corner** (that is the A/B test, not a glitch). Audio decoding is skipped above 120 MB (it reads the whole file into memory). With no video imported the speed rows say so. **Import a heavy clip (1080p/4K, ideally HEVC from the Camera Roll) first** — your first run used a 1.1 MB, 576×640 clip, which proves little about real footage. |
 | **N33** | **No in-repo component/e2e test covers the new panel** (the real-browser run in §2f was a throwaway harness, not committed). Add a Playwright spec for *Me → Playback check* when real CI is available again. |
-| **N34** | **First device run (1.3.0) — one unexplained result.** Confirmed: audio unlock ✔, silent-switch fix ✔, sound decode ✔, WebGL 2 ✔, `requestVideoFrameCallback` ✔, seeks fast (74 ms), texture upload fast (1.0 ms), HEVC playable via `<video>`; WebCodecs rejects HEVC and has no audio decoder. **Unexplained: a muted *hidden* `<video>` played at 0.42× real time** (25 frames in 2 s, none skipped — so the clock itself crawled, not the picture dropping). Suspects: iOS throttling video it thinks is invisible; a first-play warm-up; Low Power Mode; the tiny clip's own encoding. The 1.3.1 A/B/A rows tell them apart. **1b.1 is blocked on this (D-033).** |
+| **N34** | ✔ **Resolved (1.3.1 re-run, 2026-10-31).** The muted video's 0.42× was a **first-play warm-up** (picture moving after ~330 ms the first time, ~170–210 ms later); hidden and visible both ran at 1.0×, even while painting every frame to a canvas. See §10 “Second device run”. |
 | **N35** | **The 1.3.0 check had two weak measurements** (fixed in 1.3.1): it printed one 2-second average (can't separate slow start from slow crawl) and timed `drawImage` as 0.0 ms (queueing only). Treat those two 1.3.0 numbers as unproven. |
+| **N36** | **1b.1 first-cut limits:** (a) a cut to a *different* video file shows the still poster for a moment while the next video warms up (pre-warming = 1b.2); (b) files over **60 MB play silent** (decoding reads the whole file into memory) — the picture still plays; proxies/extracted audio come in 1c; (c) clip **speed also shifts the pitch**; (d) there is **no per-clip volume** (the model has none; mute is per track); (e) overlapping sounds are simply added (can clip); (f) **edits made while playing aren't heard until the next Play** (the sound plan is made at the start); (g) Bluetooth output delay isn't compensated; (h) the first Play of a session starts a little later (the video's warm-up, ≤ ~0.5 s, then sound and playhead start together). |
+| **N37** | **The meter is real now** — and **flat in the demo project**, which has no real audio (its “Audio” clip is generated, silent). Import an audio file or a video with sound to see it move. |
+| **N38** | **Playback was measured in headless Chromium, not on your phone.** There, drift ≤ 0.057 s, sound within 16 ms of the playhead. iPhone numbers are what your test (§10) provides — especially a **heavy** clip, the **start-up time**, and **cuts**. |
+| **N39** | **No committed test covers the *playing* path** of the Provider/Stage (the 41-check real-browser suite was a throwaway harness; the new pure parts have 44 unit tests). Add a Playwright spec that imports a short video with sound and plays it once real CI is available. |
 
 ### Strategic risks (see `Roadmap.md`)
 Browser API support (WebCodecs, Web Audio start rules, texture upload) varies, **especially on iOS Safari** — Phase 1b starts with research on your iPhone; phone memory limits make proxies mandatory; on-device AI means large downloads; scope is large, so phases get split.
@@ -357,11 +378,13 @@ Browser API support (WebCodecs, Web Audio start rules, texture upload) varies, *
 | D-027 | 2026-10-20 | The player shows the **original photo** and a **real full-resolution video frame** (native `<video>`, one seek in flight, follows the playhead); the small poster stays underneath and the video is revealed only after a non-blank frame is verified | Done |
 | D-028 | 2026-10-20 | Posters 512 px / JPEG 0.82; filmstrip cells 128 px tall (new imports) | Done |
 | D-029 | 2026-10-20 | **Every update ends with one plain-language commit message in the chat — never in a file** (owner's request) | Standing rule |
-| D-030 | 2026-10-30 | **1b architecture (proposed):** sound = each clip decoded to an `AudioBuffer` and played through Web Audio, with `AudioContext.currentTime` as the **master clock**; picture = a **muted `<video>`** painted to a **2D canvas** against that clock; **WebGL (R-004) and WebCodecs (R-001) deferred** (effects / export) | **Half confirmed (2026-10-31):** audio side confirmed on the device; picture side blocked by N34 |
+| D-030 | 2026-10-30 | **1b architecture:** sound = each clip decoded to an `AudioBuffer` and played through Web Audio, with `AudioContext.currentTime` as the **master clock**; picture = the video kept in step; **WebGL (R-004) and WebCodecs (R-001) deferred** | ✔ **Confirmed on the device (2026-10-31) and built in 1.4.0** — one change: the picture is an ordinary visible `<video>`, not a hidden one painted to a canvas (no need: hidden = visible = 1.0×) |
 | D-031 | 2026-10-30 | **Probe before engine:** ship an in-app Playback check and measure on the owner's phone, with their own video, before building 1b.1 | Done (owner chose “Probe first”) |
 | D-032 | 2026-10-30 | **Audio starts synchronously inside the tap** (iOS gesture rule): nothing may be `await`ed before the `AudioContext` is created/resumed or `audioSession` is set; unit-tested (L-045) | Standing rule |
-| D-033 | 2026-10-31 | **Do not start 1b.1 until the A/B/A re-probe explains the muted-video speed (N34).** If a *visible* video plays at 1.0× the picture element simply stays on screen; if nothing plays in real time the picture must be driven by seeking (as the 1.2.3 Stage already does) instead of playing | Standing — until the re-run |
+| D-033 | 2026-10-31 | ~~Do not start 1b.1 until the A/B/A re-probe explains the muted-video speed (N34).~~ | ✔ **Resolved** — the re-run showed a first-play warm-up, not throttling; 1b.1 started |
 | D-034 | 2026-10-31 | **Measure without disturbing:** playback health is judged with ordinary queued canvas draws; the forced-finish copy cost is measured separately and sparsely (L-048) | Done in 1.3.1 |
+| D-035 | 2026-11-01 | **Playback as built (1b.1):** sound = decoded `AudioBuffer`s through Web Audio; the **audio clock is the master timeline** with a time-clock fallback; the on-screen `<video>` plays muted and is kept in step (±0.04 s: nothing; up to 0.5 s: speed nudge ≤ ±25 %; beyond: seek); when playback starts on a video the clock waits ≤ 1.5 s for it to be really moving, then starts sound and playhead together. **WebGL/WebCodecs deferred** | Done — iPhone-unverified |
+| D-036 | 2026-11-01 | **The playhead never waits for sound** (only briefly for a video's start): it starts on the time clock at once and sound *joins* when ready (L-051) | Standing rule |
 
 ---
 
@@ -377,6 +400,7 @@ Browser API support (WebCodecs, Web Audio start rules, texture upload) varies, *
 | **1a.3 — full-quality player** | **2026-10-20** | **`freecut-phase-1a-3.zip`** + `freecut-phase-1a-3-changes.zip` | §2e | N27–N29 (retest ✔ 2026-10-30) |
 | **1b.0 — research + Playback check** | **2026-10-30** | **`freecut-phase-1b-0.zip`** + `freecut-phase-1b-0-changes.zip` | **§2f (reduced)** | **N30–N33** · N26 N28 (no sound/real playing yet) |
 | **1b.0.1 — A/B/A re-probe** | **2026-10-31** | **`freecut-phase-1b-0-1.zip`** + `freecut-phase-1b-0-1-changes.zip` | **§2g (reduced)** | **N34 N35** · N30 |
+| **1b.1 — real playback with sound** | **2026-11-01** | **`freecut-phase-1b-1.zip`** + `freecut-phase-1b-1-changes.zip` | **§2h (reduced)** | **N36–N39** · N30 · (N26 N28 N34 resolved) |
 
 ---
 
@@ -390,18 +414,23 @@ Unchanged: each phase ships the full zip (source only), updated docs, a **verifi
 
 ## 10. Review script — **iPhone Safari first**
 
-### Now (1.3.1, ≈ 8 min): run the sharper Playback check on your iPhone
+### Now (1.4.0, ≈ 10 min): test real playback on your iPhone
 
-**Before you start:** (1) switch **Low Power Mode OFF** (Settings → Battery; the battery icon must not be yellow) — it can slow video; (2) **import a heavy video** — ideally a 20–60 s clip straight from the Camera Roll in 1080p or 4K (HEVC is perfect). The check measures your *largest* imported video, and your last clip was only 1.1 MB.
+**Before you start:** Low Power Mode **off**; volume up; a project with **a video you imported** (a normal 10–30 s clip under ~60 MB is ideal) — and, if you can, an **audio file** (voice memo / song) imported too.
 
 | # | Do | Expect / tell me |
 |---|---|---|
-| P1 | **Me** tab | Shows **v1.3.1** (if not: fully close and reopen the tab/app twice) |
-| P2 | **Me → Playback check → Run check**, and **watch the top-left corner** | ~30 seconds. A small video thumbnail should **flash in the top-left corner twice** (about 3 s each) — that is the test, not a glitch. The button ends as **Run again** |
-| P3 | **Screenshot the whole list** (scroll for a second screenshot), or tap **Copy report** and paste it here | I need the four **Playing …** rows most: *hidden*, *visible*, *hidden again*, *visible + copy to canvas* |
-| P4 | Tap **Run again** once more, straight away, and send that report too | Shows whether the *first* play is slower than later ones |
-| P5 | Tell me: did the **silent switch** sit ON when you tried the tones last time? And is **Low Power Mode** off now? | Two yes/no answers |
-| P6 | GitHub → **Actions** | Latest run: *verify* ✔, *e2e chromium* ✔, *e2e webkit* ✔; a red **format** step alone is cosmetic (N30) |
+| P1 | **Me** tab | Shows **v1.4.0** (if not: fully close and reopen the tab/app twice) |
+| P2 | Open the project, put your video on the timeline (+ on its tile), move the playhead to its start, tap **Play** | **Sound and picture start together** within about half a second (the very first Play of a session may take a touch longer). Picture should look like **smooth video, not a slideshow**. *Tell me:* does it feel in sync? any stutter, black frames, silence? |
+| P3 | Flip the **silent switch ON** (orange showing), tap **Pause**, then **Play** again | Sound **still plays** (the silent-switch fix). Then switch it OFF again |
+| P4 | Tap **Pause** | Sound and picture **stop at once**; **Play** continues from there |
+| P5 | While it plays, **touch the timeline** and drag to a later place, then tap **Play** | Touching the timeline **pauses** playback (existing behaviour). After the drag, **Play** continues **from the new place** with sound and picture in sync. *Tell me if sound starts from the wrong place or drifts* |
+| P6 | Let it play **to the end** | It stops by itself; **Play** again starts from the beginning |
+| P7 | Add your **audio file** to the timeline (+ on its tile), play across the place where it starts | Its sound **joins at the right moment**, mixed with the video's sound |
+| P8 | Tap **Pause**, then tap the small **speaker icon at the left of the video row** on the timeline (it mutes the video's sound; an audio row has its own icon), then **Play** | That sound is silent; the picture still plays. (Muting *while* playing is only heard from the next Play — N36f.) Tap the icon again to unmute |
+| P9 | *(if you have one)* a **big video** (> 60 MB, e.g. a 4K clip) on the timeline: Play | The **picture plays but there is no sound** — that is the known limit (N36b). Tell me whether the picture still plays smoothly |
+| P10 | *(if you have two different video clips)* put both on the timeline back to back and play across the **cut** | A moment where the picture **freezes on a still** before the next video starts is expected (N36a). *Tell me how long it lasts and whether it bothers you* |
+| P11 | GitHub → **Actions** | Latest run: *verify* ✔, *e2e chromium* ✔, *e2e webkit* ✔ — **this is the first time your real tests run against the new playback code** (N30). A red **format** step alone is cosmetic; anything else red → screenshot |
 
 ### First device run (1.3.0 report, 2026-10-31) — for the record
 iPhone, **iOS 16.7**, Safari 16.6 UA, opened as a **Home Screen app**, 375×812 @3×. Test clip: a 1.1 MB, 576×640, 24 s `.mp4` (the largest video in the project).
@@ -423,6 +452,23 @@ iPhone, **iOS 16.7**, Safari 16.6 UA, opened as a **Home Screen app**, 375×812 
 | Scrubbing | ✔ median 74 ms, slowest 116 ms |
 | Upload to WebGL | ✔ median 1.0 ms |
 | Test tones | both made a sound (silent-switch position not stated) |
+
+### Second device run (1.3.1 report, 2026-10-31) — for the record
+Same iPhone (iOS 16.7, Home Screen app). Test clip: a 2.8 MB, 576×576, 36.5 s `.mp4` — **again small** (the largest video in the project). The tones were audible with the silent switch both **ON and OFF**. Environment rows unchanged from the first run.
+
+| Row | Result |
+|---|---|
+| Decode its sound | ✔ 36.4 s, 2 ch, 119 ms |
+| Open the video | ✔ 576×576, 36.5 s |
+| Playing (hidden video) | ✔ 83 frames / 3.0 s (≈ 28 fps) · clock **0.93×** overall, **1.00×** second half · first frame 28 ms, **moving after 328 ms** · 0 of 83 skipped · waiting 0, stalled 0 · decoder dropped 0 of 63 |
+| Playing (visible video) | ✔ ≈ 30 fps · **1.01×** / 1.01× · moving after **190 ms** · 1 of 87 skipped · decoder dropped 1 of 87 |
+| Playing (hidden again) | ✔ ≈ 30 fps · **1.01×** / 1.00× · moving after **205 ms** · 1 of 87 skipped |
+| Playing + copy to canvas | ✔ ≈ 30 fps · **1.01×** / 1.00× · moving after **167 ms** · 1 of 87 skipped · decoder dropped 0 of 90 |
+| Copy to canvas (forced to finish) | ✘ median 30 ms, slowest 50 ms (10 samples) — *a worst-case figure that includes the read-back used to force it; the row above shows per-frame copying keeps up (N35/L-048)* |
+| Scrubbing | ✔ median 55 ms, slowest 158 ms |
+| Upload to WebGL | ✔ median 1.0 ms |
+
+**Reading:** hidden = visible = 1.0× → no throttling; the first-ever play is slowest (328 ms vs ~170–205 ms) → a **warm-up**, which explains the earlier 0.42×. This is what 1.4.0's “wait for the picture to be moving, then start together” is built on.
 
 ### Retest for 1.2.3 — ✔ passed (you, 2026-10-30); kept for the record
 
@@ -466,7 +512,7 @@ You need: the site open on your phone, a few **photos and videos in your Photos 
 
 ## 11. Behaviour changes vs v1.1.0 (everything you'll notice)
 
-**Since 1.3.0:** the only visible change is a new row, **Me → Playback check** (in 1.3.1 its video briefly flashes in the top-left corner while it runs). Editing, playback and import behave exactly as in 1.2.3.
+**Since 1.4.0:** **Play now really plays** — imported videos and audio play with sound, the picture is real moving video (no more slideshow), the level meter moves with the actual sound (and is flat when there is none, e.g. the demo project), muted tracks are silent, and jumping while playing re-syncs. Pressing Play on a video starts after a brief moment while the picture gets going. Files over 60 MB play picture-only; a cut to a different video file shows a still for a moment (N36). **Me → Playback check** (1.3.x) is unchanged.
 
 1. **The editor opens paused at 00:00:00:00** (was: playing from 00:00:02:45).
 2. **Import works.** The Import buttons (toolbar, sidebar, the phone sheet) open your file picker; desktop also accepts drag-and-drop.
@@ -507,6 +553,9 @@ Screenshots: `docs/phase-1a/screenshots/`.
 - **Never reference media by anything but `source.mediaId`** — the orphan sweep deletes whatever no project references.
 - **iOS audio rule (D-032 / L-045):** create/`resume()` the `AudioContext` and set `audioSession.type = "playback"` in the *first statements of the tap handler, before any `await`*. Desktop Chrome forgives late starts, so a desktop test passing proves nothing about this.
 - **Don't trust "the clock ran at 1.0×" as proof of smooth video** — count skipped frames too (L-046).
+- **The playhead must never wait for sound** (D-036 / L-051): start on the time clock and let sound join. Anything that makes the first frame depend on audio readiness breaks under load.
+- **One clock for the transport:** feed it `performance.now()`, never the animation-frame timestamp (they differ; L-053).
+- **A desktop-layout browser test in a starved sandbox lies about wall-clock waits** — trust the phone layout / in-page timestamps, and control against the previous build (L-052).
 
 
 ---

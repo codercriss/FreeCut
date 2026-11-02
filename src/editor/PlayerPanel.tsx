@@ -9,7 +9,7 @@ export { Stage } from "./Stage";
 
 /* ───────────── player ───────────── */
 export function PlayerPanel() {
-  const { frame, playing, toggle, seek, fps, totalFrames } = usePlayback();
+  const { frame, playing, toggle, seek, fps, totalFrames, levels } = usePlayback();
   const [original, setOriginal] = useState(true);
   const scrubRef = useRef<HTMLDivElement>(null);
   const pct = totalFrames > 0 ? (frame / totalFrames) * 100 : 0;
@@ -20,9 +20,8 @@ export function PlayerPanel() {
     const r = el.getBoundingClientRect();
     seek(((e.clientX - r.left) / r.width) * totalFrames);
   };
-  // Fake level meter until Phase 1 brings real audio.
-  const l1 = playing ? 30 + 60 * Math.abs(Math.sin(frame / 7)) : 0;
-  const l2 = playing ? 25 + 60 * Math.abs(Math.sin(frame / 5 + 1)) : 0;
+  // The real level meter: read from the sound engine's analysers while playing (flat when there is no sound).
+  const [l1, l2] = playing ? levels() : [0, 0];
 
   return (
     <section className="ve-panel ve-player" aria-label="Player">

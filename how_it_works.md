@@ -1,6 +1,6 @@
 # How FreeCut works
 
-> **Scope:** the mechanics of the app **as built at v1.3.1 (Phase 1a + iPhone thumbnail fix + real filmstrips + full-quality player + the 1b.0 Playback check)**. Verified by reading the source, by 315 unit/component tests (v1.2.3; the 56 added in 1b.0 were run in a stand-in runner — see `Handover.md §2f`), by Chromium end-to-end runs with real video/audio/photo files, and (for the Phase 0 base) by hand on iPhone Safari.
+> **Scope:** the mechanics of the app **as built at v1.4.0 (Phase 1a + iPhone thumbnail fix + real filmstrips + full-quality player + the 1b.0 Playback check + 1b.1 real playback with sound)**. Verified by reading the source, by 315 unit/component tests (v1.2.3; the 56 added in 1b.0 were run in a stand-in runner — see `Handover.md §2f`), by Chromium end-to-end runs with real video/audio/photo files, and (for the Phase 0 base) by hand on iPhone Safari.
 > This file is **rewritten as the architecture changes** — every phase updates the relevant sections, so it always describes what is actually in the zip, not what we hope for.
 > Companions: `Handover.md` (status, issues, review script), `Roadmap.md` (plan), `Knowledge_Contribution.md` (how to contribute, learnings).
 
@@ -30,7 +30,7 @@ index.html ─► src/main.tsx ─► <ErrorBoundary><App/></ErrorBoundary>
 - **One component tree, two layouts.** Panels are shared; the shell around them differs for desktop vs phone.
 - **Local-first, no backend.** No network calls at runtime. Storage is IndexedDB: the project **and** imported media files (as Blobs). OPFS stays an unused skeleton (see §5).
 
-### Source map (v1.3.1)
+### Source map (v1.4.0)
 
 | Folder | What lives there |
 |---|---|
@@ -39,7 +39,7 @@ index.html ─► src/main.tsx ─► <ErrorBoundary><App/></ErrorBoundary>
 | `src/store/` | `createStore` + `useStore`, **`projectStore`** (history), `commands`, `editorStore` (selection), `prefsStore`, React context hooks |
 | `src/storage/` | `idb` wrapper (DB v2), `projectRepo`, `autosave`, `opfs` skeleton |
 | `src/media/` | **Phase 1a import pipeline:** `classify`, `probe`, `poster` (video → picture logic), `thumbnail` (posters + waveform), `filmstrip` + `filmstripQueue` + `useFilmstrip` (timeline filmstrips), `ingest`, `importer`, `importStore`, `mediaStore` (+ orphan sweep), `useMediaUrl` |
-| `src/engine/` | Playback clock (`clock`, `playback`) — becomes the real engine from Phase 1 |
+| `src/engine/` | Playback: `playback` (the provider; React), `transport` (where the playhead is — pure state machine), `audioEngine` (decode, cache, schedule, meter — takes injected Web Audio), `audioEngineEnv` (the real wiring), `audioPlan` (pure: which sounds play when), `videoSync` (hand-off between picture and clock), `clock` (older pure `advance`, now unused by the app) |
 | `src/editor/` | Editor shell + panels; `timeline/` (geometry, ruler, clips, desktop + phone timelines); `footage/` (generated SVG scenes) |
 | `src/home/` | Home screen, hero scenes, hero-pick logic, and the lazily loaded **`PlaybackCheckPanel`** (Me tab) |
 | `src/diagnostics/` | **Phase 1b.0 Playback check:** `playbackCheck` (pure: types, grading, the runner — all browser access goes through an injected `PlaybackEnv`), `playbackCheckEnv` (the real browser calls), `toneWav` (test-tone generator) |
@@ -187,14 +187,19 @@ State: `screen` (`home|editor`), `leaving` (the screen animating out), `launch` 
 
 ---
 
-## 7. The playback clock (`src/engine`)
+## 7. Playback (`src/engine`) — real picture and sound (Phase 1b.1)
 
-Two React contexts, deliberately split: **`FrameCtx`** (the frame; changes up to 60×/s) and **`ControlCtx`** (`playing, fps, totalFrames, toggle, pause, seek`; changes only when play/pause flips) — so buttons don't re-render per frame.
+Two React contexts, deliberately split: **`FrameCtx`** (the frame; changes up to 60×/s) and **`ControlCtx`** (`playing, fps, totalFrames, toggle, pause, seek, levels`; changes only when play/pause flips) — so buttons don't re-render per frame. `usePlaying()` is a never-throwing way to ask "is it playing?" (used by the Stage).
 
-- **Ticking:** `advance(acc, elapsedMs, fps)` (pure, in `clock.ts`) turns elapsed time into whole frames and carries the remainder, so speed is correct at 30/60/120/144 Hz (tests simulate all of them) and long stalls skip frames instead of slowing down.
-- `PlaybackProvider({ fps, totalFrames, startFrame = 0, autoPlay })` (the app passes `autoPlay={false}`) takes fps and length **from the project**. It stops at the end, rewinds on play-at-end, clamps the playhead if the project shrinks (undo/delete), and handles an empty project.
-- **The editor opens paused at 00:00:00:00** (Handover K2 fixed in Phase 1a — see §5b for why it mattered). Phase 1b swaps the `rAF` clock for an audio-driven master clock.
-- The level meter in the player is still a sine-wave fake until Phase 1.
+**The idea:** sound comes from **Web Audio** (decoded once, played from memory), and the **audio clock is the master timeline**; the picture is the same on-screen `<video>` the Stage already had, now really playing (muted) and kept in step with the playhead. This follows what the owner's iPhone showed (Playback check, R-005): audio unlocks from the tap, the silent-switch fix works, decoding is fast, and a muted video plays at 1.0× whether visible or hidden.
+
+- **`transport.ts`** — a small, deterministic state machine (time is passed in; unit-tested without clocks). Phases: **perf** (the plain time clock), **audio** (the playhead = start + audio time × fps), **holding** (only when playback starts on a video: wait ≤ 1.5 s for it to be really moving). **The playhead never waits for sound:** it starts on the time clock at once, and the sound *joins* — re-anchored to where the playhead is — the moment it is decoded and the context is running. If audio can't run (no Web Audio, suspended, interrupted, decode failed) it simply stays on the time clock; if the audio clock vanishes or freezes mid-play it drops back to the time clock **without a jump**. A restart (seek while playing) cancels any decode still pending from the earlier run.
+- **`audioPlan.ts`** (pure) — from the project and a start frame: which clips make sound (video clips use their own sound; audio clips; **photos and the built-in demo footage are silent; a muted track is skipped**), when each starts, where in the file, for how long, at what speed. A clip already under the playhead starts part-way in (honouring trim and speed). `catchUp` trims a sound whose start time has already passed.
+- **`audioEngine.ts`** — decodes each file once (`decodeAudioData`), caches it (≤ 200 MB, oldest dropped first), schedules the plan on the audio clock, and reads a real **level meter** from two analysers (−60…0 dB, with a gentle fall-back). Files over **60 MB are left silent** (decoding reads the whole file into memory; proxies come in 1c — N36). Everything browser-specific comes in through `EngineEnv`/`ContextLike`, so it is tested with a fake audio context; `audioEngineEnv.ts` is the real wiring (and returns nothing where there is no Web Audio, e.g. jsdom).
+- **`playback.tsx`** — owns one engine and one transport. **`toggle()` wakes the audio context synchronously inside the tap** (iOS only lets sound start from inside the gesture itself — D-032), then flips `playing`; while playing, an animation-frame loop asks the transport for the frame (using `performance.now()`, the same clock the transport started with). A seek while playing restarts sound and clock from the new place. It stops at the end, rewinds on play-at-end, clamps if the project shrinks, and handles an empty project. **The editor opens paused at 00:00:00:00.**
+- **The picture (`editor/Stage.tsx`).** Paused, `StageVideo` chases the playhead by seeking, one seek in flight (unchanged — exact for scrubbing). Playing, it plays muted and a small controller keeps it with the playhead: within ±0.04 s do nothing; up to 0.5 s adjust `playbackRate` by up to ±25 % (a gentle catch-up); beyond that seek (at most every 0.7 s). When it is really moving it **reports the timeline frame to `videoSync`** — that is how the clock starts sound and playhead together with the picture — and reveals itself (a clip starting at source time 0 never triggers a seek, so it would otherwise stay hidden).
+- **Known limits (first cut):** a cut to a *different* video file shows the still poster while the next video warms up (pre-warming = 1b.2); clip speed also shifts the pitch; there is no per-clip volume (the model has none — mute is per track); overlapping sounds are simply added; edits made *while* playing aren't heard until the next Play (the plan is made at the start); Bluetooth output delay isn't compensated.
+- **Still open (K3):** the playhead is still a React state updated every frame; an imperative playhead remains future work.
 
 ---
 
@@ -278,8 +283,8 @@ Shared controls (`ui/controls.tsx`): **`Slider` is now keyboard-operable** (`tab
 
 | Today | Becomes | Phase |
 |---|---|---|
-| Posters instead of playing video; fake meter; one filmstrip image per clip | A muted `<video>` painted to a **2D canvas** (WebGL2 deferred — R-004); sound from Web Audio buffers (R-005); real levels | 1b.1 |
-| `rAF` frame counter | Audio-driven master clock (`AudioContext.currentTime`), imperative playhead | 1b.1 |
+| One filmstrip image per clip; cuts between *different* video files show the poster while the next video warms up; long files (> 60 MB) are silent | Per-moment filmstrips; pre-warmed next clip (1b.2); proxies and sound for long files (1c) | 1b.2 / 1c |
+| Playhead is a React state updated every frame (now follows the audio clock) | Imperative playhead | later (K3) |
 | Whole-file blobs in IndexedDB | Proxies for heavy files; (maybe) OPFS where it's reliable | 1c |
 | Selection/props for one clip | Multi-select, move/trim/split/ripple, snapping | 2 |
 | `transform.zoom` (UI semantic) | Real transform/keyframes (schema v2 migration) | 3 |
