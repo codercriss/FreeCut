@@ -10,7 +10,7 @@ import { Timeline } from "./Timeline";
 
 beforeEach(() => {
   setSelection(["clip-main"]);
-  prefsStore.setState((p) => ({ ...p, magnet: false, snap: true, link: false, axis: false }));
+  prefsStore.setState({ magnet: false, snap: true, link: false, axis: false });
 });
 
 describe("desktop Timeline — driven by the project model", () => {

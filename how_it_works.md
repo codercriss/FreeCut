@@ -52,13 +52,12 @@ index.html ─► src/main.tsx ─► <ErrorBoundary><App/></ErrorBoundary>
 
 ## 2. Boot sequence
 
-1. **`index.html`** runs three inline scripts before React:
-   - *Theme:* reads `localStorage["freecut.prefs"]` and sets `<html data-theme="auto|dark|light">` **before first paint** so the app never flashes the wrong theme. The page's own split background uses two inline variables that mirror the palette (`theme.css` owns the real one).
+1. **`index.html`** (unchanged from v1.0.0) runs two inline scripts before React:
    - *iOS flag:* detects iPhone/iPod/iPad (incl. iPadOS posing as Mac) → `class="ios"` on `<html>`, plus `standalone` when launched from the Home Screen. `--safe-top/--safe-bottom` get `env(safe-area-inset-*)` **only** when `ios` is set.
    - *Standalone nudge:* an iOS home-screen app can start one status-bar short until the first scroll, so the script scrolls 1 px and back after `load` (60 ms, 400 ms) and on each return to visible. The body is deliberately taller than the screen.
-   Global CSS: box-sizing reset, hidden scrollbars, no overscroll bounce, and a **split background** that follows the theme (`--bg` / `--panel`) so any strip iOS doesn't paint blends with the nearest bar.
+   Global CSS: box-sizing reset, hidden scrollbars, no overscroll bounce, and a **split background** (`#0f0f10` / `#1a1a1c`) so any strip iOS doesn't paint blends with the nearest bar.
 2. **`main.tsx`** → `StrictMode` → root `ErrorBoundary` → `App`. (StrictMode double-runs effects in dev; `boot()` is memoised so it only runs once.)
-3. **`App`** renders `<div class="fc-boot">` (theme background) until `boot()` resolves — typically a few ms — and calls `initTheme()` (`app/theme.ts`), which keeps the palette (`data-theme`) and the browser chrome (`color-scheme`, `theme-color`) in step with the saved preference, including the system theme flipping while "auto" is chosen.
+3. **`App`** renders `<div class="fc-boot">` (plain dark) until `boot()` resolves — typically a few ms.
 4. **`boot()`** (`app/boot.ts`) = `bootstrapProject()` → `startAutosave()` → set default selection → **sweep orphaned media** (best effort, in the background).
 5. **Idle warm-up:** once Home is showing, `requestIdleCallback` (or a 1.2 s timeout) fetches the editor chunk so opening the editor is instant.
 6. **PWA:** `vite-plugin-pwa` (production build only) emits `sw.js`/`manifest`; the service worker precaches everything *including the lazy editor chunk and CSS* (`globPatterns`), with `navigateFallback: index.html` and `registerType: "autoUpdate"`.
@@ -253,7 +252,6 @@ Shared controls (`ui/controls.tsx`): **`Slider` is now keyboard-operable** (`tab
 `Home({ mobile, onOpen })` → `MobileHome` (hero, two big actions, Recent, Tools, bottom tabs Edit / Templates / Projects / Me) or `DesktopHome` (sidebar, hero, Quick start, project grid).
 
 - **The project card is real:** name, length and "Saved on this device" (or "Not saved (storage unavailable)") come from the store; it opens the persisted project. Templates/Tools/"New project" still just open the editor (Phase 9). **Reset demo project** (Me tab on phone; sidebar on desktop; two taps) replaces the saved project with a fresh sample.
-- **Appearance (1.4.3, Me tab + desktop sidebar; dropdown since 1.4.4):** `ThemePicker` in `Home.tsx` is a dropdown — a closed button naming the current choice (icon + label + chevron), opening a `listbox` menu of Auto / Dark / Light with a check on the saved one; it closes on an outside tap, a scroll underneath, or Escape (which returns focus). It writes the `theme` pref (`prefsStore`) — the palette itself is CSS (`styles/theme.css`, see §11).
 - **A fresh look on every open** (`heroPick.ts`): a module-level pick `{scene, headline}` in `localStorage["freecut.home.pick"]`; `rollIndex` never repeats the last index; re-rolls at load and when the page returns after being hidden ≥ 20 s; `useOpenPick()` (`useSyncExternalStore`) reports `fresh` so the swap fades in.
 - **Hero scenes** (`HeroScenes.tsx`): six SVG scenes on a 400×300 canvas, ids from `useId`; ambient motion only inside `.hm-live`, transform/opacity only, off under reduced motion. Project thumbnails always use `dusk` (it matches the demo clip).
 - `BrandMark` (one component, unique mask id per instance) is used by both Home and the editor.
@@ -263,8 +261,7 @@ Shared controls (`ui/controls.tsx`): **`Slider` is now keyboard-operable** (`tab
 
 ## 11. Styling & bundles
 
-- Styles are **real CSS files** (moved out of JS template strings; verified equivalent to the originals after minification). Prefixes: `ve-` editor, `hm-` Home, `fc-` layers/app shell, `sc-` scene animation. `editor.css` is imported by `Editor` and therefore ships **inside the lazy editor chunk**.
-- **Theming (1.4.3, completed 1.4.4):** all design tokens live on `<html>` in `styles/theme.css` — dark values by default, a light palette under `data-theme="light"`, and the same light palette under `data-theme="auto"` inside `prefers-color-scheme: light`. The old per-scope copies on `.hm` / `.ve-app` / `.ve-toast` are gone, so one attribute switch re-themes the whole app. What is deliberately **not** themed: the video letterbox, the demo footage scenes, the hero artwork, the timeline clip colours (teal video / blue audio), and overlays painted *on* media (duration badges, the add/⋯ dots) — content keeps its look in both themes, like a video player. `color-scheme` flips with the palette (native controls, select dropdown, scrollbars) and `theme-color` follows the resolved theme (auto resolves via `matchMedia`). The 1.4.4 "chrome extras" token group finished the pass: the phone tab bar (`--bar`), active accent tints (`--accent-soft`/`--accent-soft-2`), the slider halo (`--glow`), the dialog backdrop (`--scrim`), the storage tip (`--tip-*`), the storage banner (`--warn-bg/ink/line`), the "New video" gradient (`--cta-a/b`), plus the play/playhead/scrub-mark colours and the logo (`currentColor`) — dark values byte-identical to the hard-coded ones they replaced.
+- Styles are **real CSS files** (moved out of JS template strings; verified equivalent to the originals after minification). Prefixes: `ve-` editor, `hm-` Home, `fc-` layers/app shell, `sc-` scene animation. Tokens are CSS variables on `.ve-app` / `.hm`. `editor.css` is imported by `Editor` and therefore ships **inside the lazy editor chunk**.
 - Phase 0 CSS additions: slider focus ring, disabled toolbar buttons, audio-clip selection outline, amber/red autosave dot, Reset-demo link, boot/warning/crash styles.
 - **Build output (v1.2.0):** initial JS 202.8 kB (64.2 kB gzip) + CSS 17.6 kB; editor chunk 69.3 kB (20.2 kB gzip) + CSS 29.5 kB, fetched on idle. (v1.0.0 shipped one 273.5 kB / 77.9 kB gzip bundle.) PWA precache: 18 entries, 344 KiB.
 

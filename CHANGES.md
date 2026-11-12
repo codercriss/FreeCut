@@ -1,61 +1,66 @@
-# CHANGES — v1.4.3 → v1.4.4 (light mode everywhere + the Appearance dropdown)
+# CHANGES — v1.4.4 → v1.4.5 (the appearance switcher is gone)
 
-Two things, both born from your screenshots of 1.4.3:
+One thing, and it is a removal: **the dark / light / auto theme feature introduced in v1.4.3 and
+completed in v1.4.4 has been taken out completely.** FreeCut is dark-only again — pixel for pixel
+the v1.4.2 look, which was always the intended one.
 
-1. **Light mode now really covers everything** — the first theme pass (1.4.3) left a handful of small
-   pieces hard-coded dark, and some of them actively broke in light mode: the **bottom tab bar** (dark
-   bar + dark labels), the **play / playhead** buttons (white icons on light panels), the white
-   **FreeCut logo** on the light sidebar and avatar, the desktop **scrub marker**, the **"New video"
-   card** (white text on bright teal), the editor's **storage tip**, the **storage-unavailable banner**,
-   the media-rail / timeline-tool **active tints**, the **slider hover halo**, and the **dialog backdrop**.
-   All of these are now theme tokens (`theme.css`); dark mode is byte-for-byte today's look, and the
-   content you edit (video letterbox, footage scenes, hero artwork, the timeline's teal/blue clips)
-   still keeps its own colours in both themes, like a video player.
-2. **Appearance is a dropdown now** (Me → Appearance, and the desktop sidebar) instead of three
-   side-by-side buttons. The closed button shows the current choice with its icon; tapping it opens a
-   small menu with **Auto / Dark / Light** and a check mark on the saved one. It closes on a tap outside,
-   a scroll, or Escape (which hands focus back), and it announces itself properly to screen readers
-   (`aria-expanded` / `listbox`). The Me list card no longer clips it open.
+What went:
 
-This set is **cumulative**: if you have not uploaded v1.4.3 yet, the files below include it — upload
-all **23** and you are current either way (from v1.4.2). If v1.4.3 is already in the repo, upload the
-**14 files in this set**.
-Totals (this set): **0 new files · 14 changed files · 0 files to delete**.
+- **Me → Appearance** (and the desktop sidebar row) — gone. The dropdown, its three options, its
+  tests: deleted. The Me list is back to exactly what it was before 1.4.3.
+- **The palette machinery** — gone. `src/styles/theme.css`, the ~35 design tokens, the
+  `data-theme` switch, the pre-paint boot script in `index.html`, and `src/app/theme.ts`
+  (which kept `<html data-theme>` and the `color-scheme` / `theme-color` meta tags in step).
+  Every colour is hard-coded again, exactly the numbers from before 1.4.3.
+- **The `theme` preference** — gone. `prefsStore` is back to the four timeline toggles
+  (magnet / snap / link / axis). A saved `freecut.prefs` entry that still contains a `theme`
+  field is simply ignored — nothing breaks for anyone who picked one.
+- **The knock-on touch-ups** 1.4.3/1.4.4 had made so the second palette would work — also back
+  out: the logo's "F" and the playhead handle are white again (they no longer need
+  `currentColor`), and the split boot background in `index.html` is the fixed dark pair again.
+
+Nothing else moved: the 1.4.2 iOS scrub-then-Play fix, playback, imports, the library — all
+exactly as they were in v1.4.2. If v1.4.4 (or 1.4.3) is in the repo, upload the **17 files in this
+set** and delete the **4 files** listed at the bottom. If you are still on 1.4.2, only the
+docs + version files differ — the eleven source files will replace themselves with identical
+content to what you have, minus the 1.4.3+ changes you never took.
 
 ## How to update
 
-1. Upload the files below into their folders (all replace existing ones). Nothing to delete, nothing new.
-2. Commit. Check the **Actions** job is green — it was run here in full: typecheck · lint · format · **469 tests in 43 files** · build, all green.
-3. To see it: pick **Light** in Me → Appearance. Flip between Light and Dark and watch the small stuff too — the tab bar, the editor's play button, the logo, the storage tip.
+1. Upload the files below into their folders (all replace existing ones).
+2. **Delete the 4 files listed at the bottom** — they are the feature itself.
+3. Commit. Check the **Actions** job is green — it was run here in full: typecheck · lint · format · tests · build, all green.
+4. To see it: open **Me** — no Appearance row. The app is dark, and there is no way (or need) to change that.
 
-## Changed files (14)
+## Changed files (17)
 
 - `CHANGES.md` *(this note)*
 - `Handover.md` *(header: version, what was verified this time)*
-- `Knowledge_Contribution.md` *(L-060: dropdowns inside clipped cards; completing a theme pass)*
-- `how_it_works.md` *(Appearance §10: dropdown; theming §11: the new token group)*
-- `package.json` / `package-lock.json` *(version 1.4.4)*
-- `src/styles/theme.css` *(new "chrome extras" tokens — bar, accent tints, glow, scrim, tip, warning banner, CTA gradient — dark values identical to today's hard-coded ones; light values freshly tuned)*
-- `src/styles/editor.css` *(play/scrub-mark/playhead colours, slider halo, active tints, storage tip, dialog backdrop — all tokens now)*
-- `src/styles/home.css` *(tab bar token; "New video" gradient tokens; the dropdown's styles; the Me list no longer clips menus)*
-- `src/styles/app.css` *(storage-unavailable banner → tokens)*
-- `src/ui/BrandMark.tsx` *(the "F" is `currentColor` — it was white-only and vanished on light panels)*
-- `src/editor/timeline/Clips.tsx` *(the playhead handle follows the playhead colour via `currentColor`)*
-- `src/home/Home.tsx` *(ThemePicker rewritten as a dropdown: closed state, menu, outside-tap / scroll / Escape close, focus return, aria)*
-- `src/home/ThemePicker.test.tsx` *(rewritten for the dropdown: 6 tests — open/close, the three options, live switch + persistence, outside tap, scroll, Escape + focus)*
+- `how_it_works.md` *(reverted to the pre-1.4.3 text: boot sequence, Home, styling sections no longer describe themes)*
+- `Knowledge_Contribution.md` *(L-059 / L-060 — the two theming lessons — removed with the feature they describe)*
+- `package.json` / `package-lock.json` *(version 1.4.5)*
+- `index.html` *(the pre-paint theme script and the themed boot colours are gone; the fixed dark split background is back)*
+- `src/app/App.tsx` *(no `initTheme()` and no theme.css import — back to the plain boot sequence)*
+- `src/store/prefsStore.ts` *(no `Theme` type, no `theme` field, no `setTheme` — the four timeline toggles only)*
+- `src/home/Home.tsx` *(no `ThemePicker` — the Me tab and the desktop sidebar are back to their pre-1.4.3 rows)*
+- `src/styles/app.css` · `src/styles/editor.css` · `src/styles/home.css` · `src/styles/transitions.css`
+  *(every `var(--…)` from the theme tokens is back to the hard-coded dark value it was before 1.4.3; dark mode was byte-identical all along, so these are effectively the 1.4.2 stylesheets)*
+- `src/ui/BrandMark.tsx` *(the "F" is `#fff` again — it only needed `currentColor` for light panels)*
+- `src/editor/timeline/Clips.tsx` *(the playhead handle is `#fff` again — same reason)*
+- `src/editor/timeline/Timeline.test.tsx` *(back to the plain `setState` — no `theme` field to preserve)*
 
-## What you get, in plain words
+## Files to DELETE from the repo (4)
 
-- **Light mode is finished, down to the tiny things.** The phone's bottom bar is now frosted white in light (it was near-black with dark-grey labels — unreadable); the editor's play button, scrub marker and both playheads are ink-coloured where they used to be white-on-white; the logo, the storage tip and the warning banner get light-mode equivalents; active tints follow the (darker) light-mode accent; the "New video" card gets a deeper teal gradient so its white text still passes.
-- **Dark mode did not move.** Every token's dark value is the same number that was hard-coded before — verified by eye and by the diff.
-- **The appearance control is one neat dropdown** showing the current choice (icon + name + chevron), with the three options in a menu that checks the saved one and closes politely.
+- `src/app/theme.ts` *(the live theme applier)*
+- `src/styles/theme.css` *(the token palette — dark and light)*
+- `src/home/ThemePicker.test.tsx` *(its 6 dropdown tests)*
+- `src/store/prefsStore.test.ts` *(the theme-persistence tests)*
 
 ## Verified here
 
-- Full suite: typecheck · lint · format · **469 tests in 43 files** · production build — all green (the two net-new tests cover the dropdown's open/close behaviour).
-- Both themes exercised on the same screens as 1.4.3's sweep, plus the new dropdown: opened from the Me row and the sidebar, selection, closure. The old light-mode failures listed above (tab-bar labels, play button, scrub marker, logo) were re-checked in a real (headless) Chromium in light mode.
-- Still not tested on a real iPhone — nothing in this set is platform-specific (CSS tokens + one small React component).
-
-## Files to DELETE from the repo (0)
-
-_none_
+- Full suite: typecheck · lint · format · **459 tests in 41 files** · production build — all green
+  (the 10 theme tests went with the feature; 459 is exactly the v1.4.2 count).
+- The eleven reverted source files are **bit-for-bit the v1.4.2 versions** (reverted against the
+  exact pre-feature commit, then re-checked), so the app's look and behaviour carry 1.4.2's
+  verification with them. The only new code is nothing — this release is a removal.
+- Still not tested on a real iPhone — nothing here is platform-specific.

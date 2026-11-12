@@ -206,7 +206,7 @@ export const PlayheadHead = () => (
   <svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">
     <path
       d="M1.8.5h7.4a1.3 1.3 0 0 1 1.3 1.3v4.6L5.5 11.5.5 6.4V1.8A1.3 1.3 0 0 1 1.8.5z"
-      fill="currentColor" /* was #fff — invisible over the light timeline; follows .ve-playhead's color */
+      fill="#fff"
     />
   </svg>
 );

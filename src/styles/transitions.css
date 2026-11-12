@@ -8,7 +8,7 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: none;
-  background: var(--bg);
+  background: #0f0f10;
 }
 .fc-home {
   z-index: 1;

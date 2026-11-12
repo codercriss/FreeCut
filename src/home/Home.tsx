@@ -1,36 +1,29 @@
 import {
   Activity,
   Camera,
-  Check,
-  ChevronDown,
   Eraser,
   Film,
   Folder,
   Home as HomeIcon,
   LayoutTemplate,
   Mic,
-  Monitor,
-  Moon,
   Plus,
   Play,
   RotateCcw,
   Scissors,
-  Sun,
-  SunMoon,
   Type,
   Upload,
   User,
   Wand2,
   WifiOff,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { BRAND_NAME } from "../app/brand";
 import type { LaunchOptions } from "../app/NavContext";
 import { projectDuration } from "../model/selectors";
 import { mmss } from "../model/time";
 import { saveStatusStore } from "../storage/autosave";
 import { useStore } from "../store/createStore";
-import { prefsStore, setTheme, THEMES, type Theme } from "../store/prefsStore";
 import { useProject } from "../store/ProjectContext";
 import { BrandMark } from "../ui/BrandMark";
 import { resetDemoProject } from "../app/actions";
@@ -75,89 +68,6 @@ function ResetDemoButton({ className }: { className?: string }) {
     >
       {armed ? "Tap again to confirm reset" : "Reset demo project"}
     </button>
-  );
-}
-
-/** The three-way appearance choice: Auto (follow the system) / Dark / Light. v1.4.4 made it a
- * dropdown (it was three inline buttons): the closed button names the current choice; the menu
- * lists the three with a check on the saved one. The palette itself is theme.css; `setTheme`
- * only saves the pick (and `theme.ts` switches `<html data-theme>` live). */
-const THEME_ICONS: Record<Theme, typeof Sun> = { auto: Monitor, dark: Moon, light: Sun };
-const THEME_LABELS: Record<Theme, string> = { auto: "Auto", dark: "Dark", light: "Light" };
-
-export function ThemePicker({ className }: { className?: string }) {
-  const theme = useStore(prefsStore, (p) => p.theme);
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLSpanElement>(null);
-  const btn = useRef<HTMLButtonElement>(null);
-  const CurrentIcon = THEME_ICONS[theme];
-
-  // while open: a tap outside, a scroll underneath, or Escape closes (Escape returns focus)
-  useEffect(() => {
-    if (!open) return;
-    const outside = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      setOpen(false);
-      btn.current?.focus();
-    };
-    const onScroll = () => setOpen(false);
-    document.addEventListener("pointerdown", outside);
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("scroll", onScroll, true);
-    return () => {
-      document.removeEventListener("pointerdown", outside);
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("scroll", onScroll, true);
-    };
-  }, [open]);
-
-  return (
-    <span className={`hm-theme-dd${className ? ` ${className}` : ""}`} ref={root}>
-      <button
-        ref={btn}
-        type="button"
-        className="hm-theme-btn"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label="Appearance"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <CurrentIcon size={13} strokeWidth={2} aria-hidden="true" />
-        <span>{THEME_LABELS[theme]}</span>
-        <ChevronDown size={13} strokeWidth={2.2} className="hm-chev" aria-hidden="true" />
-      </button>
-      {open && (
-        <ul className="hm-theme-menu" role="listbox" aria-label="Appearance">
-          {THEMES.map((t) => {
-            const Icon = THEME_ICONS[t];
-            const on = theme === t;
-            return (
-              <li key={t}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={on}
-                  onClick={() => {
-                    setTheme(t);
-                    setOpen(false);
-                    btn.current?.focus();
-                  }}
-                >
-                  <Icon size={13} strokeWidth={2} aria-hidden="true" />
-                  <span>{THEME_LABELS[t]}</span>
-                  {on && (
-                    <Check size={13} strokeWidth={2.4} className="hm-tick" aria-hidden="true" />
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </span>
   );
 }
 
@@ -376,11 +286,6 @@ function MobileHome({ onOpen }: { onOpen: OpenFn }) {
                   <em>This device</em>
                 </li>
                 <li>
-                  <SunMoon size={18} strokeWidth={1.9} />
-                  <span>Appearance</span>
-                  <ThemePicker />
-                </li>
-                <li>
                   <Film size={18} strokeWidth={1.9} />
                   <span>About {BRAND_NAME}</span>
                   <em>v{__APP_VERSION__}</em>
@@ -458,10 +363,6 @@ function DesktopHome({ onOpen }: { onOpen: OpenFn }) {
             </button>
           ))}
         </nav>
-        <div className="hm-side-theme">
-          <span>Appearance</span>
-          <ThemePicker />
-        </div>
         <div className="hm-sidefoot">
           <WifiOff size={14} strokeWidth={2} />
           <span>Works offline</span>
