@@ -90,8 +90,10 @@ export function VideoClip({
   selected,
   onToggle,
 }: VideoClipProps) {
-  const frames = Math.min(90, Math.max(1, Math.round(width / 41.6)));
   const scene = asset.source.type === "generated" ? asset.source.thumb || asset.source.scene : null;
+  // A drawn demo scene costs ~500 SVG shapes per cell (zooming in used to create dozens of them), so those clips use
+  // few, wider cells; photo/video cells are cheap bitmaps and keep the dense strip.
+  const frames = Math.min(scene ? 10 : 90, Math.max(1, Math.round(width / 41.6)));
   const poster = usePosterUrl(asset);
   const strip = useFilmstrip(asset, fps);
   return (

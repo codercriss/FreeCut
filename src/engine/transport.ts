@@ -104,6 +104,14 @@ export class Transport {
     return this.lastFrame;
   }
 
+  /**
+   * Where the playhead is right now, without advancing anything. Cheap and side-effect free, so the picture can follow
+   * the real clock on its own schedule instead of waiting for the screen to re-render.
+   */
+  peek(now: number): number {
+    return this.frameNow(now);
+  }
+
   stop(): void {
     this.epoch += 1;
     this.deps.audio?.stop();

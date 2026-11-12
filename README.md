@@ -1,6 +1,6 @@
 # FreeCut
 
-Browser-based video editor (PWA) — React + TypeScript + Vite. Goal: a free, offline-capable alternative to CapCut. **v1.4.0 — Phase 1b.1: real playback with sound.** Your imported videos and audio now really play — picture and sound together, kept in step — and the level meter is real. Built on earlier phases: import your own videos, photos and audio (real thumbnails, library, add to timeline, full-quality player) and a Me-tab “Playback check” that measures what your phone can do. See `Roadmap.md`.
+Browser-based video editor (PWA) — React + TypeScript + Vite. Goal: a free, offline-capable alternative to CapCut. **v1.4.1 — smoother playback, scrubbing and zoom.** Your imported videos and audio play with sound, picture and sound together and kept in step (Phase 1b.1), and this patch — from the first phone test — stops background work from competing with playback, makes the picture follow the clock without constant speed changes, and cuts the cost of scrubbing and zooming the timeline. Built on earlier phases: import your own videos, photos and audio (real thumbnails, library, add to timeline, full-quality player) and a Me-tab “Playback check” that measures what your phone can do. See `Roadmap.md`.
 
 ## Project docs
 - [`Roadmap.md`](Roadmap.md) — phased plan to a full CapCut-class editor, gap analysis, open decisions.

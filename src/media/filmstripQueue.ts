@@ -1,3 +1,4 @@
+import { whenQuiet } from "../engine/busy";
 import type { Asset } from "../model/types";
 import { makeFilmstrip, type StripMeta, type StripResult } from "./filmstrip";
 import { getMedia, getMediaRecord, putMedia, stripIdOf } from "./mediaStore";
@@ -10,15 +11,18 @@ export interface QueueDeps {
   save(id: string, blob: Blob, meta: StripMeta): Promise<void>;
   refresh(id: string): void;
   warn(message: string): void;
+  /** Optional: resolves when it is a good moment to start (the person is not playing, scrubbing or zooming). */
+  pause?(): Promise<void>;
 }
 
 const realDeps: QueueDeps = {
   hasStrip: async (id) => !!(await getMediaRecord(id)),
   getFile: (id) => getMedia(id),
-  make: (file, dur) => makeFilmstrip(file, dur),
+  make: (file, dur) => makeFilmstrip(file, dur, { pause: whenQuiet }),
   save: (id, blob, meta) => putMedia(id, blob, Date.now(), meta),
   refresh: refreshMedia,
   warn: (m) => console.warn(m),
+  pause: () => whenQuiet(),
 };
 
 const jobs = new Map<string, Promise<void>>(); // one job per video per page load (also remembers failures)
@@ -49,6 +53,7 @@ export function requestFilmstrip(
   const run = async () => {
     try {
       if (await deps.hasStrip(stripId)) return;
+      await deps.pause?.(); // never start while the person is playing, scrubbing or zooming
       const file = await deps.getFile(mediaId);
       if (!file) return deps.warn(`[FreeCut] filmstrip: stored file for "${asset.name}" not found`);
       const r = await deps.make(file, durationSec);

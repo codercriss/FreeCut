@@ -11,6 +11,7 @@ import { activeVisualClip, assetById } from "../model/selectors";
 import type { Frame } from "../model/types";
 import { useProjectStore } from "../store/ProjectContext";
 import { planAudio } from "./audioPlan";
+import { holdBusy } from "./busy";
 import { createAudioEngine } from "./audioEngineEnv";
 import type { AudioEngine } from "./audioEngine";
 import { Transport } from "./transport";
@@ -32,6 +33,8 @@ export interface Controls {
   seek: (frame: Frame) => void;
   /** Left/right meter levels, 0–100; [0, 0] when there is no sound. Cheap enough to read every frame. */
   levels: () => [number, number];
+  /** The playhead right now, read straight from the clock (the `frame` state is only refreshed ~30× a second). */
+  liveFrame: () => number;
 }
 
 const FrameCtx = createContext<Frame>(0);
@@ -41,6 +44,12 @@ export const useFrame = (): Frame => useContext(FrameCtx);
 
 /** Is playback running? Unlike `useControls`, safe to call with no provider (it then says no). */
 export const usePlaying = (): boolean => useContext(ControlCtx)?.playing ?? false;
+
+/** The live playhead reader, or undefined with no provider. Lets the picture follow the clock directly. */
+export const useLiveFrame = (): (() => number) | undefined => useContext(ControlCtx)?.liveFrame;
+
+/** How often the on-screen frame number is refreshed while playing (milliseconds): about 30 times a second. */
+const COMMIT_MS = 33;
 
 export function useControls(): Controls {
   const ctl = useContext(ControlCtx);
@@ -106,16 +115,26 @@ export function PlaybackProvider({
   useEffect(() => {
     if (!playing) return undefined;
     let raf = 0;
+    let lastCommit = -Infinity;
+    // While playing, heavy background work (building filmstrips) waits, so it cannot fight the picture for the phone.
+    const release = holdBusy();
     transport.begin(frameRef.current, performance.now(), true);
     const tick = () => {
-      const next = transport.tick(performance.now());
-      setFrame((f) => (f === next ? f : next));
+      const now = performance.now();
+      const next = transport.tick(now);
+      // The picture and sound follow the clock directly; the screen's frame number is refreshed ~30×/s, which halves
+      // the re-rendering and the timeline scrolling the phone has to do. The end is always shown at once.
+      if (next >= timing.current.totalFrames || now - lastCommit >= COMMIT_MS) {
+        lastCommit = now;
+        setFrame((f) => (f === next ? f : next));
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(raf);
       transport.stop();
+      release();
     };
   }, [playing, transport]);
 
@@ -131,12 +150,17 @@ export function PlaybackProvider({
       fps,
       totalFrames,
       toggle: () => {
+        // Stopping: show the true last frame in the same update that flips `playing` (never a moment later).
+        if (playing) setFrame(transport.peek(performance.now()));
         // iOS only lets sound start from inside the tap itself, so wake the audio context right here, synchronously.
         if (!playing && totalFrames > 0) engine?.unlock();
         if (!playing && totalFrames > 0 && frameRef.current >= totalFrames) setFrame(0);
         setPlaying((p) => (totalFrames > 0 ? !p : false));
       },
-      pause: () => setPlaying(false),
+      pause: () => {
+        if (playingRef.current) setFrame(transport.peek(performance.now()));
+        setPlaying(false);
+      },
       seek: (f) => {
         const next = Math.max(0, Math.min(totalFrames, Math.round(f)));
         setFrame(next);
@@ -146,6 +170,7 @@ export function PlaybackProvider({
         if (playingRef.current && jumped) transport.begin(next, performance.now(), false);
       },
       levels: () => engine?.levels() ?? [0, 0],
+      liveFrame: () => (playingRef.current ? transport.peek(performance.now()) : frameRef.current),
     }),
     [playing, fps, totalFrames, engine, transport],
   );

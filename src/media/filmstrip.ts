@@ -86,6 +86,11 @@ export interface StripEnv extends Pick<PosterEnv, "createVideo" | "attach" | "de
 export interface StripOptions {
   totalMs?: number;
   stepMs?: number;
+  /**
+   * Called before each step of the work; resolve when it is a good moment to carry on. The app uses it to wait while
+   * the person plays, scrubs or zooms. Time spent waiting does not count against `totalMs`.
+   */
+  pause?: () => Promise<void>;
 }
 
 export interface StripResult {
@@ -94,6 +99,9 @@ export interface StripResult {
   notes: string[];
 }
 
+/** A wait longer than this (milliseconds) is long enough to let go of the hidden video until it ends. */
+const LONG_WAIT_MS = 400;
+
 export async function stripFromVideo(
   url: string,
   durationSec: number,
@@ -101,11 +109,14 @@ export async function stripFromVideo(
   opts: StripOptions = {},
 ): Promise<StripResult> {
   const stepMs = opts.stepMs ?? 3000;
-  const deadline = Date.now() + (opts.totalMs ?? 45000);
+  let deadline = Date.now() + (opts.totalMs ?? 45000);
   const left = () => Math.max(50, Math.min(stepMs, deadline - Date.now()));
   const notes: string[] = [];
   const v = env.createVideo();
-  try {
+  let open = false; // the video is attached and has media loaded
+
+  /** Attach the video, load the file and get a frame genuinely decoded (the same iOS-proofing as posters). */
+  const warm = async () => {
     v.muted = true;
     v.playsInline = true;
     v.preload = "auto";
@@ -113,8 +124,6 @@ export async function stripFromVideo(
     v.src = url;
     if (v.readyState < 1) await waitForEvent(v, ["loadedmetadata"], left());
     if (!v.videoWidth || !v.videoHeight) throw new Error("no picture size");
-
-    // Same iOS-proofing as posters: get a frame genuinely decoded before seeking around.
     try {
       const p = v.play();
       if (p && typeof (p as Promise<void>).then === "function")
@@ -133,12 +142,44 @@ export async function stripFromVideo(
       }
     }
     v.pause();
+    open = true;
+  };
+
+  /**
+   * Wait for a quiet moment. If the wait is long, let go of the hidden video while waiting — an idle attached video
+   * still holds a decoder and memory on a phone, and the person is busy with the real one — and open it again after.
+   */
+  const quiet = async () => {
+    if (!opts.pause) return;
+    const waitedFrom = Date.now();
+    const gate = opts.pause();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const longWait = new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(true), LONG_WAIT_MS);
+    });
+    const waitedLong = await Promise.race([gate.then(() => false), longWait]);
+    clearTimeout(timer);
+    let released = false;
+    if (waitedLong && open) {
+      env.detach(v);
+      open = false;
+      released = true;
+    }
+    await gate;
+    deadline += Date.now() - waitedFrom; // waiting for the person to finish is not the video being slow
+    if (released) await warm();
+  };
+
+  try {
+    await quiet();
+    await warm();
 
     const count = stripCount(durationSec);
     const meta = env.begin(v.videoWidth, v.videoHeight, count, durationSec);
     let good = 0;
     const times = frameTimes(durationSec, count);
     for (let i = 0; i < count; i++) {
+      await quiet();
       if (Date.now() < deadline) {
         v.currentTime = times[i];
         try {
@@ -158,6 +199,7 @@ export async function stripFromVideo(
       notes.push(`only ${good}/${count} frames could be reached`);
       return { blob: null, meta: null, notes };
     }
+    await quiet(); // the image encode is one long, uninterruptible step: start it only in a quiet moment
     const blob = await env.finish();
     notes.push(`${good}/${count} frames ok`);
     return blob

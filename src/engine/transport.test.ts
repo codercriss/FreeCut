@@ -266,6 +266,27 @@ describe("Transport — when sound cannot run", () => {
   });
 });
 
+describe("Transport — peek", () => {
+  it("reads the live playhead without changing anything", async () => {
+    const r = rig({ audio: false });
+    r.t.begin(10, 0, true);
+    expect(r.t.peek(500)).toBe(40); // 10 + 30 frames
+    expect(r.t.peek(500)).toBe(40);
+    expect(r.t.peek(1000)).toBe(70);
+    expect(r.t.phase).toBe("perf");
+  });
+
+  it("follows the audio clock once the sound has joined", async () => {
+    const r = rig();
+    r.t.begin(0, 0, false);
+    await flush();
+    r.t.tick(16);
+    expect(r.t.phase).toBe("audio");
+    r.audio.time = 100 + AUDIO_LEAD_S + 1;
+    expect(r.t.peek(9999)).toBe(60); // one audio second, whatever the time clock says
+  });
+});
+
 describe("Transport — restarting", () => {
   it("ignores a decode from an earlier run that finishes late", async () => {
     const r = rig();

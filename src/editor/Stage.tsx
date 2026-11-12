@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { usePlaying } from "../engine/playback";
+import { decideDrift, newDriftState, type DriftState } from "../engine/drift";
+import { useLiveFrame, usePlaying } from "../engine/playback";
 import { videoSync } from "../engine/videoSync";
 import { isBlankPixels } from "../media/poster";
 import { useMediaUrl, usePosterUrl } from "../media/useMediaUrl";
@@ -63,14 +64,22 @@ interface StageVideoProps {
   speed?: number;
   /** Called once per start, when the video is really moving, with its time in seconds (see `videoSync`). */
   onMoving?: (videoTimeSec: number) => void;
+  /** Where the video should be right now, read from the live clock (so following does not wait for a re-render). */
+  liveTime?: () => number;
 }
+
+/** A scrub is "in progress" until the playhead has been still for this long (milliseconds). */
+const SCRUB_SETTLE_MS = 160;
 
 /**
  * A native <video> showing `timeSec`. Paused: it chases `timeSec`; one seek is in flight at a time (so scrubbing
- * never piles up work on a phone) and when it lands we chase the latest target. Playing: it plays muted and a small
- * controller keeps it within a frame or two of `timeSec` — a gentle speed-up or slow-down for small drift, a seek
- * only for big drift (a jump in the clip, a slow start). It stays invisible until a real, non-blank frame has been
- * verified (a genuinely black first frame is accepted after a few tries) or, when playing, until it is moving.
+ * never piles up work on a phone) and when it lands we chase the latest target. While the playhead is moving fast,
+ * Safari's `fastSeek` (nearest keyframe, much quicker on long-GOP video) gives a live preview; when the playhead has
+ * been still for a moment an exact seek lands the right frame. Playing: it plays muted and a small controller
+ * (`engine/drift.ts`) keeps it in step with the LIVE clock — left alone inside a dead zone, one gentle correction
+ * beyond it, a jump only for big drift — driven by the video's own frame callback, not by React re-renders. It stays
+ * invisible until a real, non-blank frame has been verified (a genuinely black first frame is accepted after a few
+ * tries) or, when playing, until it is moving.
  */
 export function StageVideo({
   url,
@@ -80,6 +89,7 @@ export function StageVideo({
   playing = false,
   speed = 1,
   onMoving,
+  liveTime,
 }: StageVideoProps) {
   const ref = useRef<HTMLVideoElement>(null);
   const [shown, setShown] = useState(false);
@@ -93,35 +103,54 @@ export function StageVideo({
   speedRef.current = speed;
   const movingRef = useRef(onMoving);
   movingRef.current = onMoving;
-  const lastResync = useRef(0);
+  const liveRef = useRef(liveTime);
+  liveRef.current = liveTime;
+  const lastMove = useRef(-Infinity); // when the playhead last moved while paused (for scrubbing)
+  const prevTime = useRef(timeSec);
+  const lastFast = useRef(Number.NaN); // the target of the last fast seek, so it is not repeated
 
   const seekToTarget = (v: HTMLVideoElement) => {
-    if (seeking.current || Math.abs(v.currentTime - target.current) < 0.03) return;
+    const gap = Math.abs(v.currentTime - target.current);
+    if (seeking.current || gap < 0.03) return;
+    const scrubbing = performance.now() - lastMove.current < SCRUB_SETTLE_MS;
+    if (scrubbing && gap > 0.5 && typeof v.fastSeek === "function") {
+      if (lastFast.current === target.current) return; // already there as near as a keyframe gets: wait for the settle
+      lastFast.current = target.current;
+      seeking.current = true;
+      v.fastSeek(target.current);
+      return;
+    }
+    lastFast.current = Number.NaN;
     seeking.current = true;
     v.currentTime = target.current;
   };
 
-  /** Playing: keep the picture in step with the playhead. */
-  const follow = (v: HTMLVideoElement) => {
-    const drift = v.currentTime - target.current; // positive: the picture is ahead of the playhead
-    if (Math.abs(drift) > 0.5) {
-      const now = performance.now();
-      if (!seeking.current && now - lastResync.current > 700) {
-        lastResync.current = now;
-        seeking.current = true;
-        v.currentTime = target.current;
-      }
-      return;
+  /** Playing: keep the picture in step with the live clock. */
+  const follow = (v: HTMLVideoElement, state: DriftState) => {
+    const want = liveRef.current ? liveRef.current() : target.current;
+    const action = decideDrift(state, v.currentTime - want, speedRef.current, performance.now());
+    if (action.kind === "seek") {
+      seeking.current = true;
+      v.currentTime = want;
+    } else if (action.kind === "rate") {
+      if (Math.abs(v.playbackRate - action.rate) > 0.001) v.playbackRate = action.rate;
+    } else if (!state.correcting && Math.abs(v.playbackRate - speedRef.current) > 0.001) {
+      v.playbackRate = speedRef.current; // e.g. the clip's speed changed at a cut
     }
-    const nudge = Math.abs(drift) > 0.04 ? Math.max(-0.25, Math.min(0.25, drift)) : 0;
-    v.playbackRate = speedRef.current * (1 - nudge);
   };
 
+  // Paused: chase the playhead exactly (quickly, by keyframe, while it is still moving; exactly once it settles).
   useEffect(() => {
     const v = ref.current;
-    if (!v || v.readyState < 1) return;
-    if (playing) follow(v);
-    else seekToTarget(v); // paused: chase the playhead exactly
+    if (playing) return undefined;
+    if (prevTime.current !== timeSec) {
+      prevTime.current = timeSec; // the playhead really moved (not just a first load): a scrub is in progress
+      lastMove.current = performance.now();
+    }
+    if (!v || v.readyState < 1) return undefined;
+    seekToTarget(v);
+    const settle = setTimeout(() => seekToTarget(v), SCRUB_SETTLE_MS + 10);
+    return () => clearTimeout(settle);
   }, [timeSec, playing]);
 
   // Start / stop real playback. The video is muted: all sound comes from Web Audio.
@@ -133,33 +162,38 @@ export function StageVideo({
       v.playbackRate = 1;
       return undefined;
     }
+    const drift = newDriftState();
     v.playbackRate = speedRef.current;
     const from = v.currentTime;
-    let done = false;
+    let reported = false;
+    let stopped = false;
     let handle = 0;
-    const watch = (_now?: number, meta?: { mediaTime?: number }) => {
-      if (done) return;
+    const step = (_now?: number, meta?: { mediaTime?: number }) => {
+      if (stopped) return;
       const t = meta?.mediaTime ?? v.currentTime;
-      // Not while a seek is landing: its jump would look like movement and show a wrong frame.
-      if (!v.seeking && t - from >= 0.04) {
-        done = true;
-        setShown(true); // it is really moving: show it
-        movingRef.current?.(t);
-        return;
+      if (!reported) {
+        // Not while a seek is landing: its jump would look like movement and show a wrong frame.
+        if (!v.seeking && t - from >= 0.04) {
+          reported = true;
+          setShown(true); // it is really moving: show it
+          movingRef.current?.(t);
+        }
+      } else if (!seeking.current && !v.seeking) {
+        follow(v, drift); // only once the clock has started from this picture
       }
       handle = schedule();
     };
     const hasCallback = typeof v.requestVideoFrameCallback === "function";
     const schedule = (): number => {
-      if (hasCallback) return v.requestVideoFrameCallback(watch);
-      return requestAnimationFrame(watch);
+      if (hasCallback) return v.requestVideoFrameCallback(step);
+      return requestAnimationFrame(step);
     };
     handle = schedule();
     // If play() is refused or interrupted, the clock simply times out waiting and carries on.
     const started = v.play();
     if (started) started.catch(() => undefined);
     return () => {
-      done = true;
+      stopped = true;
       if (typeof v.cancelVideoFrameCallback === "function") v.cancelVideoFrameCallback(handle);
       else cancelAnimationFrame(handle);
       v.pause();
@@ -231,6 +265,7 @@ export function Stage({ frame }: { frame: number }) {
     asset && asset.source.type === "stored" && asset.kind !== "audio" ? asset.source.mediaId : null;
   const fullUrl = useMediaUrl(mediaId);
   const playing = usePlaying();
+  const live = useLiveFrame();
   const reportMoving = (videoSec: number) => {
     if (!clip) return;
     const at = clip.start + (videoSec * fps - clip.sourceIn) / clip.speed;
@@ -250,6 +285,7 @@ export function Stage({ frame }: { frame: number }) {
           playing={playing}
           speed={clip.speed}
           onMoving={reportMoving}
+          liveTime={live && clip ? () => stageTime(clip, live(), fps) : undefined}
         />
       )}
     </div>

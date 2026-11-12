@@ -155,6 +155,7 @@ function makeEnv(mode: FakeVideo["mode"]) {
   const seeksAtDraw: number[] = [];
   let video!: FakeVideo;
   let detached = 0;
+  let attached = 0;
   let layout!: StripMeta;
   const env: StripEnv = {
     createVideo: () => {
@@ -163,7 +164,9 @@ function makeEnv(mode: FakeVideo["mode"]) {
     },
     attach: (v) => {
       let value = "";
+      attached += 1;
       Object.defineProperty(v, "src", {
+        configurable: true, // attach() can be called again after the video was let go during a long wait
         get: () => value,
         set: (x: string) => {
           value = x;
@@ -189,6 +192,9 @@ function makeEnv(mode: FakeVideo["mode"]) {
     get detached() {
       return detached;
     },
+    get attached() {
+      return attached;
+    },
     get layout() {
       return layout;
     },
@@ -207,6 +213,68 @@ describe("stripFromVideo", () => {
     expect(h.seeksAtDraw).toEqual(frameTimes(10, 10));
     expect(h.detached).toBe(1);
     expect(r.notes.at(-1)).toBe("10/10 frames ok");
+  });
+
+  it("asks the pause hook before every frame and before encoding, and builds the same sprite", async () => {
+    const h = makeEnv("normal");
+    let calls = 0;
+    const r = await stripFromVideo("blob:x", 6, h.env, {
+      ...FAST,
+      pause: async () => {
+        calls += 1;
+      },
+    });
+    expect(calls).toBe(1 + 6 + 1); // once at the start, once per frame, once before the encode
+    expect(r.blob).not.toBeNull();
+    expect(h.drawn).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it("lets go of the hidden video during a long wait and opens it again afterwards", async () => {
+    const h = makeEnv("normal");
+    let n = 0;
+    const r = await stripFromVideo("blob:x", 6, h.env, {
+      ...FAST,
+      pause: async () => {
+        n += 1;
+        if (n === 4) await new Promise((res) => setTimeout(res, 700)); // the person is busy for a while
+      },
+    });
+    expect(h.attached).toBe(2); // once at the start, once to resume
+    expect(h.detached).toBe(2); // let go during the wait, and again at the end
+    expect(r.blob).not.toBeNull();
+    expect(r.notes.at(-1)).toMatch(/^(\d+)\/\1 frames ok$/);
+    expect(h.drawn).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it("keeps the video open through a short wait", async () => {
+    const h = makeEnv("normal");
+    let n = 0;
+    await stripFromVideo("blob:x", 6, h.env, {
+      ...FAST,
+      pause: async () => {
+        n += 1;
+        if (n === 4) await new Promise((res) => setTimeout(res, 100));
+      },
+    });
+    expect(h.attached).toBe(1);
+    expect(h.detached).toBe(1);
+  });
+
+  it("does not count time spent paused against the deadline (no half-empty sprite)", async () => {
+    const h = makeEnv("normal");
+    // A 600 ms allowance for 2 frames, but the person keeps the phone busy for 1000 ms before the first frame.
+    // Without stretching the deadline by that wait, the allowance would be gone before any frame is drawn.
+    let n = 0;
+    const r = await stripFromVideo("blob:x", 2, h.env, {
+      stepMs: 40,
+      totalMs: 600,
+      pause: async () => {
+        n += 1;
+        if (n === 2) await new Promise((res) => setTimeout(res, 1000));
+      },
+    });
+    expect(r.notes.some((x) => x.includes("out of time"))).toBe(false);
+    expect(r.notes.at(-1)).toMatch(/^(\d+)\/\1 frames ok$/); // every frame was reached
   });
 
   it("iOS-like video (frames only exist after play()) still works, because we play first", async () => {

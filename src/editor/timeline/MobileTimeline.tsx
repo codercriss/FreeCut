@@ -1,5 +1,6 @@
 import { Mic, Plus, Trash2 } from "lucide-react";
 import {
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -9,7 +10,8 @@ import {
   type TouchEvent,
   type UIEvent,
 } from "react";
-import { useControls, useFrame } from "../../engine/playback";
+import { pulseBusy } from "../../engine/busy";
+import { useControls, useFrame, usePlaying } from "../../engine/playback";
 import { clamp } from "../../model/time";
 import { useStore } from "../../store/createStore";
 import { editorStore, setSelection } from "../../store/editorStore";
@@ -44,15 +46,19 @@ function ScrollSync({
   fps: number;
 }) {
   const frame = useFrame();
+  const playing = usePlaying();
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const target = (frame / fps) * pps;
-    if (Math.abs(el.scrollLeft - target) > 0.6) {
+    // While playing, do not read scrollLeft: reading it forces a layout on every frame, which a phone cannot afford.
+    // Trust what we last wrote instead (touching the timeline pauses playback, so nobody else is scrolling).
+    const current = playing ? lastProg.current : el.scrollLeft;
+    if (Math.abs(current - target) > 0.6) {
       lastProg.current = target; // remember so onScroll can tell our own moves apart from the user's
       el.scrollLeft = target;
     }
-  }, [frame, pps, fps, scrollRef, lastProg]);
+  }, [frame, pps, fps, playing, scrollRef, lastProg]);
   return null;
 }
 
@@ -63,6 +69,8 @@ export function MobileTimeline({ onAdd }: { onAdd: () => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastProg = useRef(-999);
   const pinch = useRef<{ d: number; z: number } | null>(null);
+  const pinchLatest = useRef<number | null>(null); // the zoom the fingers are asking for right now
+  const pinchTimer = useRef(0);
 
   const allTracks = useProject((p) => p.tracks);
   const clips = useProject((p) => p.clips);
@@ -81,34 +89,49 @@ export function MobileTimeline({ onAdd }: { onAdd: () => void }) {
   const scale = useMemo(() => createTimeScale(fps, pps, 0), [fps, pps]);
   const contentW = duration * pps;
 
-  const zoomBy = (k: number) => setS((z) => clamp(z * k, MOBILE_SCALE_MIN, MOBILE_SCALE_MAX));
+  useEffect(() => () => window.clearTimeout(pinchTimer.current), []);
+
+  const zoomBy = (k: number) => {
+    pulseBusy(900); // background work waits while the timeline is being re-laid out
+    setS((z) => clamp(z * k, MOBILE_SCALE_MIN, MOBILE_SCALE_MAX));
+  };
+  /** Apply the latest pinch zoom now (the fingers lifted, or the throttle timer fired). */
+  const commitPinch = () => {
+    window.clearTimeout(pinchTimer.current);
+    pinchTimer.current = 0;
+    if (pinchLatest.current !== null) setS(pinchLatest.current);
+  };
   const dist = (t: TouchEvent["touches"]) =>
     Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
 
   const onScroll = (e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     if (Math.abs(el.scrollLeft - lastProg.current) < 1.5) return; // our own programmatic scroll
+    pulseBusy(700); // the person is scrubbing: keep background work out of the way
     seek((el.scrollLeft / pps) * fps);
   };
   const halt = () => {
     if (playing) pause(); // touching the timeline pauses, like the real app
   };
   const onTouchStart = (e: TouchEvent) => {
+    pulseBusy(700);
     if (e.touches.length === 2) pinch.current = { d: dist(e.touches), z: S };
   };
   const onTouchMove = (e: TouchEvent) => {
     if (pinch.current && e.touches.length === 2) {
-      setS(
-        clamp(
-          pinch.current.z * (dist(e.touches) / pinch.current.d),
-          MOBILE_SCALE_MIN,
-          MOBILE_SCALE_MAX,
-        ),
-      );
+      // Finger events arrive far faster than the timeline can be re-laid out: keep only the latest asked-for zoom
+      // and apply it at most about every 90 ms, so events never pile up behind slow renders.
+      const asked = pinch.current.z * (dist(e.touches) / pinch.current.d);
+      pinchLatest.current = clamp(asked, MOBILE_SCALE_MIN, MOBILE_SCALE_MAX);
+      pulseBusy(900);
+      if (!pinchTimer.current) pinchTimer.current = window.setTimeout(commitPinch, 90);
     }
   };
   const onTouchEnd = (e: TouchEvent) => {
-    if (e.touches.length < 2) pinch.current = null;
+    if (e.touches.length >= 2) return;
+    if (pinch.current) commitPinch();
+    pinch.current = null;
+    pinchLatest.current = null;
   };
   const toggleSelect = (id: string) => setSelection(selectedIds.includes(id) ? [] : [id]);
 

@@ -39,6 +39,36 @@ describe("requestFilmstrip", () => {
     expect(d.refresh).toHaveBeenCalledWith("m-a:strip");
   });
 
+  it("waits for a quiet moment before reading the file and building (the person is playing)", async () => {
+    const order: string[] = [];
+    let go!: () => void;
+    const gate = new Promise<void>((resolve) => (go = resolve));
+    const d = deps({
+      pause: vi.fn(async () => {
+        order.push("pause");
+        await gate;
+        order.push("quiet");
+      }),
+      getFile: vi.fn(async () => {
+        order.push("read");
+        return new Blob(["video"]);
+      }),
+    });
+    const job = requestFilmstrip(video("a"), 10, d);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(d.getFile).not.toHaveBeenCalled(); // still waiting
+    go();
+    await job;
+    expect(order).toEqual(["pause", "quiet", "read"]);
+    expect(d.make).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not wait at all when the sprite already exists", async () => {
+    const d = deps({ hasStrip: vi.fn(async () => true), pause: vi.fn(async () => undefined) });
+    await requestFilmstrip(video("a"), 10, d);
+    expect(d.pause).not.toHaveBeenCalled();
+  });
+
   it("does nothing if the sprite already exists in storage", async () => {
     const d = deps({ hasStrip: vi.fn(async () => true) });
     await requestFilmstrip(video("a"), 10, d);
