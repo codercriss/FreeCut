@@ -13,7 +13,12 @@ export function BrandMark({ size = 15 }: { size?: number }) {
           <path d="M2.5 22 22 2.5" stroke="#000" strokeWidth="2.6" />
         </mask>
       </defs>
-      <g mask={`url(#${mask})`} fill="#fff">
+      {/*
+        The "F" is currentColor (was #fff — vanished on the light sidebar / avatar panels); every
+        container that shows the mark already sets color: var(--text). The mask's white/black
+        rects stay literal: mask luminance is visibility, not paint.
+      */}
+      <g mask={`url(#${mask})`} fill="currentColor">
         <rect x="4.5" y="3.5" width="4" height="17" rx="1.3" />
         <rect x="4.5" y="3.5" width="15" height="4" rx="1.3" />
         <rect x="4.5" y="10" width="10" height="3.6" rx="1.3" />

@@ -248,7 +248,7 @@
   height: 54px;
 }
 .ve-media.rail .ve-tab.on {
-  background: rgba(18, 198, 216, 0.1);
+  background: var(--accent-soft);
 }
 .ve-media.rail .ve-tab.on::before {
   content: "";
@@ -627,7 +627,7 @@
   bottom: 2px;
   width: 1px;
   margin-left: -0.5px;
-  background: #fff;
+  background: var(--text); /* was #fff — invisible on the light panel */
   opacity: 0.85;
 }
 .ve-ctrl {
@@ -679,10 +679,10 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  color: #fff;
+  color: var(--text);
 }
 .ve-play:hover {
-  background: #2a2a2d;
+  background: var(--field-hi);
 }
 .ve-ctrl-right {
   margin-left: auto;
@@ -893,7 +893,7 @@
 .ve-slider:hover .ve-slider-thumb {
   box-shadow:
     0 0 0 1px var(--line),
-    0 0 0 3px rgba(255, 255, 255, 0.14);
+    0 0 0 3px var(--glow);
 }
 .ve-num {
   width: 59px;
@@ -1009,7 +1009,7 @@
 }
 .ve-tl-btn.active {
   color: var(--accent);
-  background: rgba(18, 198, 216, 0.14);
+  background: var(--accent-soft-2);
 }
 .ve-tl-right {
   margin-left: auto;
@@ -1182,7 +1182,9 @@
   bottom: 0;
   width: 1px;
   margin-left: -0.5px;
-  background: #fff;
+  background: var(--text); /* was #fff — vanished on the light timeline */
+  color: var(--text); /* the handle svg (PlayheadHead) follows via currentColor */
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35); /* hairline so it reads on either palette */
   pointer-events: none;
   z-index: 5;
 }
@@ -1339,10 +1341,10 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  color: #fff;
+  color: var(--text);
 }
 .ve-mob-play:active {
-  background: #26262a;
+  background: var(--field-hi);
 }
 .ve-mob-ctrl-right {
   margin-left: auto;
@@ -1464,7 +1466,10 @@
   bottom: 0;
   width: 1.5px;
   margin-left: -0.75px;
-  background: #fff;
+  background: var(
+    --text
+  ); /* was #fff — the hairline below kept it readable, now it reads by itself */
+  color: var(--text);
   pointer-events: none;
   z-index: 6;
   box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35);
@@ -2025,8 +2030,8 @@
   margin: 0 0 6px;
   padding: 6px 8px;
   border-radius: 6px;
-  background: #1f2b2e;
-  color: #b9d6da;
+  background: var(--tip-bg);
+  color: var(--tip-text);
   font-size: 10px;
   line-height: 1.4;
 }
@@ -2123,7 +2128,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--scrim);
 }
 .ve-dialog {
   width: min(360px, calc(100vw - 24px));

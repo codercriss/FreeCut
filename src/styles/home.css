@@ -330,7 +330,7 @@
   background: var(--field);
 }
 .hm-card-main {
-  background: linear-gradient(155deg, #26dcee, #0fa6b8);
+  background: linear-gradient(155deg, var(--cta-a), var(--cta-b));
   color: var(--on-accent);
   box-shadow: none;
 }
@@ -446,7 +446,8 @@
   border-radius: 16px;
   background: var(--panel);
   box-shadow: inset 0 0 0 1px var(--line);
-  overflow: hidden;
+  /* no overflow:hidden — the Appearance dropdown must be able to open past the card (v1.4.4).
+     Nothing inside paints to the rounded corners any more, so clipping is not needed. */
 }
 .hm-list li {
   display: flex;
@@ -475,7 +476,10 @@
   flex: none;
   display: flex;
   padding: 6px 6px calc(env(safe-area-inset-bottom, 0px) + 6px);
-  background: rgba(22, 22, 24, 0.94);
+  background: var(
+    --bar
+  ); /* was a hard-coded near-black — with the light palette the labels
+     turned dark-on-dark; now each theme supplies its own translucent bar */
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
   border-top: 1px solid var(--line);
@@ -823,32 +827,84 @@
   color: var(--danger-text);
 }
 
-/* Phase 1b.2: appearance picker — Me → Appearance, and the desktop sidebar. The three-way choice
-   is <ThemePicker> in Home.tsx; the palette it switches lives in theme.css. */
-.hm-theme-seg {
+/* Phase 1b.2 → v1.4.4: appearance picker — Me → Appearance, and the desktop sidebar. It is a
+   dropdown now (<ThemePicker> in Home.tsx): a closed button naming the current choice, and a
+   small menu listing Auto / Dark / Light with a check on the saved one. The palette it switches
+   lives in theme.css. */
+.hm-theme-dd {
+  position: relative;
+  display: inline-flex;
+}
+.hm-theme-btn {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 9px 0 12px;
   border-radius: 999px;
   background: var(--seg);
   box-shadow: inset 0 0 0 1px var(--line);
-}
-.hm-theme-seg button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--dim);
-}
-.hm-theme-seg button.on {
-  background: var(--seg-on);
   color: var(--text);
-  box-shadow: 0 0 0 1px var(--line-strong);
+}
+.hm-theme-btn:hover {
+  background: var(--field-hi);
+}
+.hm-theme-btn .hm-chev {
+  color: var(--dim);
+  transition: transform 0.15s ease;
+}
+.hm-theme-btn[aria-expanded="true"] .hm-chev {
+  transform: rotate(180deg);
+}
+.hm-theme-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  min-width: 148px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border-radius: 10px;
+  background: var(--raised);
+  box-shadow:
+    inset 0 0 0 1px var(--line-strong),
+    0 8px 24px var(--shadow);
+}
+/* On the Me tab the menu sits inside a .hm-list row, so its own <li>s would inherit the
+   54px row height, 16px padding and the divider line — neutralise all three. */
+.hm-theme-menu li {
+  display: block;
+  height: auto;
+  padding: 0;
+}
+.hm-theme-menu li + li {
+  border-top: 0;
+}
+.hm-theme-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 9px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  color: var(--text-soft);
+}
+.hm-theme-menu button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.hm-theme-menu button[aria-selected="true"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+.hm-theme-menu .hm-tick {
+  margin-left: auto;
+  color: var(--accent);
 }
 .hm-side-theme {
   display: flex;

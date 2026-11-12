@@ -11,7 +11,11 @@
    Deliberately NOT themed (they are content, not chrome): the video letterbox,
    the demo footage scenes, the hero artwork, and the media-clip colours on the
    timeline (teal video / blue audio) — your footage keeps its look in both
-   themes, like a video player.
+   themes, like a video player. Overlays painted ON media (duration badges, the
+   add/⋯ dots on thumbnails) stay dark too, for the same reason.
+   v1.4.4 note: the "chrome extras" group below completes the first theme pass —
+   the bars, tints, overlays and small controls that were still hard-coded and
+   broke (or vanished) in light mode (see CHANGES.md v1.4.3 → v1.4.4).
    ──────────────────────────────────────────────────────────────────────────── */
 
 :root {
@@ -46,6 +50,19 @@
   --add-btn: #f2f2f3;
   --add-btn-hi: #ffffff;
   --shadow: rgba(0, 0, 0, 0.45);
+  /* chrome extras: bars, tints, overlays (v1.4.4; dark = today's exact look) */
+  --bar: rgba(22, 22, 24, 0.94); /* the phone's bottom tab bar (behind blur) */
+  --accent-soft: rgba(18, 198, 216, 0.1); /* active media-rail tab wash */
+  --accent-soft-2: rgba(18, 198, 216, 0.14); /* active timeline tool wash */
+  --glow: rgba(255, 255, 255, 0.14); /* slider-thumb hover halo */
+  --scrim: rgba(0, 0, 0, 0.55); /* dialog / sheet backdrop */
+  --tip-bg: #1f2b2e; /* storage tip (media panel) */
+  --tip-text: #b9d6da;
+  --warn-bg: #3a2a10; /* storage-unavailable banner */
+  --warn-ink: #ffe2a8;
+  --warn-line: #7a5a1c;
+  --cta-a: #26dcee; /* Home "New video" card gradient */
+  --cta-b: #0fa6b8;
   /* status */
   --ok: #35c76f;
   --warn: #e9c13a;
@@ -89,6 +106,19 @@
   --add-btn: #ffffff;
   --add-btn-hi: #eceef2;
   --shadow: rgba(0, 0, 0, 0.16);
+  /* chrome extras: bars, tints, overlays (v1.4.4) — light values */
+  --bar: rgba(255, 255, 255, 0.94);
+  --accent-soft: rgba(14, 127, 140, 0.1);
+  --accent-soft-2: rgba(14, 127, 140, 0.12);
+  --glow: rgba(15, 30, 40, 0.08);
+  --scrim: rgba(24, 32, 50, 0.4);
+  --tip-bg: #e2f1f3;
+  --tip-text: #0d5f6b;
+  --warn-bg: #fcf3da;
+  --warn-ink: #6a4a10;
+  --warn-line: #e7d6a6;
+  --cta-a: #0fa3b6;
+  --cta-b: #0c7280;
   /* status */
   --ok: #16a34a;
   --warn: #ca8a04;

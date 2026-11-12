@@ -1,6 +1,8 @@
 import {
   Activity,
   Camera,
+  Check,
+  ChevronDown,
   Eraser,
   Film,
   Folder,
@@ -21,7 +23,7 @@ import {
   Wand2,
   WifiOff,
 } from "lucide-react";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { BRAND_NAME } from "../app/brand";
 import type { LaunchOptions } from "../app/NavContext";
 import { projectDuration } from "../model/selectors";
@@ -76,34 +78,85 @@ function ResetDemoButton({ className }: { className?: string }) {
   );
 }
 
-/** The three-way appearance choice: Auto (follow the system) / Dark / Light. The palette itself is
- * theme.css; `setTheme` only saves the pick (and `theme.ts` switches `<html data-theme>` live). */
+/** The three-way appearance choice: Auto (follow the system) / Dark / Light. v1.4.4 made it a
+ * dropdown (it was three inline buttons): the closed button names the current choice; the menu
+ * lists the three with a check on the saved one. The palette itself is theme.css; `setTheme`
+ * only saves the pick (and `theme.ts` switches `<html data-theme>` live). */
 const THEME_ICONS: Record<Theme, typeof Sun> = { auto: Monitor, dark: Moon, light: Sun };
+const THEME_LABELS: Record<Theme, string> = { auto: "Auto", dark: "Dark", light: "Light" };
 
 export function ThemePicker({ className }: { className?: string }) {
   const theme = useStore(prefsStore, (p) => p.theme);
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLSpanElement>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  const CurrentIcon = THEME_ICONS[theme];
+
+  // while open: a tap outside, a scroll underneath, or Escape closes (Escape returns focus)
+  useEffect(() => {
+    if (!open) return;
+    const outside = (e: PointerEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      btn.current?.focus();
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open]);
+
   return (
-    <span
-      className={`hm-theme-seg${className ? ` ${className}` : ""}`}
-      role="group"
-      aria-label="Appearance"
-    >
-      {THEMES.map((t) => {
-        const Icon = THEME_ICONS[t];
-        const on = theme === t;
-        return (
-          <button
-            key={t}
-            type="button"
-            className={on ? "on" : ""}
-            onClick={() => setTheme(t)}
-            aria-pressed={on}
-          >
-            <Icon size={13} strokeWidth={2} />
-            <span>{t === "auto" ? "Auto" : t === "dark" ? "Dark" : "Light"}</span>
-          </button>
-        );
-      })}
+    <span className={`hm-theme-dd${className ? ` ${className}` : ""}`} ref={root}>
+      <button
+        ref={btn}
+        type="button"
+        className="hm-theme-btn"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Appearance"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <CurrentIcon size={13} strokeWidth={2} aria-hidden="true" />
+        <span>{THEME_LABELS[theme]}</span>
+        <ChevronDown size={13} strokeWidth={2.2} className="hm-chev" aria-hidden="true" />
+      </button>
+      {open && (
+        <ul className="hm-theme-menu" role="listbox" aria-label="Appearance">
+          {THEMES.map((t) => {
+            const Icon = THEME_ICONS[t];
+            const on = theme === t;
+            return (
+              <li key={t}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={on}
+                  onClick={() => {
+                    setTheme(t);
+                    setOpen(false);
+                    btn.current?.focus();
+                  }}
+                >
+                  <Icon size={13} strokeWidth={2} aria-hidden="true" />
+                  <span>{THEME_LABELS[t]}</span>
+                  {on && (
+                    <Check size={13} strokeWidth={2.4} className="hm-tick" aria-hidden="true" />
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </span>
   );
 }
