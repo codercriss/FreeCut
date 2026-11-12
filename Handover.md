@@ -5,10 +5,10 @@
 | | |
 |---|---|
 | **Project** | FreeCut — browser-based video editor (PWA), aiming to be a free CapCut alternative |
-| **Version** | **v1.4.6** — record-keeping release: **1.4.2's scrub-then-Play fix phone-verified ✔** (2026-11-12); code identical to 1.4.5 · 1.4.5 = appearance switcher removed, dark-only, exactly the 1.4.2 look · 1.4.2 = iOS scrub-then-Play fix · 1.4.1 = smoother picture, scrubbing and zoom · 1.4.0 = real playback with sound · 1.3.x = research + Playback check · 1.2.3 = full-quality player · 1.2.2 = real filmstrips · 1.2.1 = iPhone thumbnail fix · 1.2.0 = media import & library |
-| **Delivered** | 2026-11-12 · 1.4.6 — **1.4.2 is phone-verified** (your retest: scrub, then Play → the picture appears ✔); docs-only set · 2026-11-12 · 1.4.5 as a cumulative change set (17 files to replace, 4 to delete — rolls back 1.4.3 + 1.4.4 entirely) · 2026-11-12 · 1.4.2 + 1.4.3 as one cumulative change set · 2026-11-09 · `freecut-phase-1b-1-1.zip` (full) and changes zip since 1.4.0 |
-| **Status** | 1.4.6 = 1.4.5's code (which is 1.4.2's code) + this record — **fully run here**: typecheck · lint · format · **459 tests in 41 files** · build, all green. **1.4.2's iOS scrub-then-Play fix is now phone-verified** (2026-11-12: scrub, then Play — the picture appears ✔ on your iPhone). Still open: the red **End-to-end CI job's log** (N40) and **heavy-clip** (1080p/4K) Playback-check numbers (P8). Earlier: 1.4.1's four fixes for your first phone test still stand |
-| **Next** | **1b.2 is unblocked** (retest ✔): filmstrip image encode off the main thread · pre-warming the next clip at a cut · heavy-clip check — plus the e2e log (N40) → 1c (projects, proxies, sound for long files) → Phase 2 |
+| **Version** | **v1.4.7** — record-keeping release: **P8 is in** (your heavy-clip Playback-check report) and it changed 1b.2's shape — two real bugs now visible (high-fps A/V desync, heavy-clip handling); code identical to 1.4.5/1.4.6 = 1.4.2 · 1.4.6 = 1.4.2 phone-verified · 1.4.5 = appearance switcher removed, dark-only · 1.4.2 = iOS scrub-then-Play fix · 1.4.1 = smoother picture, scrubbing and zoom · 1.4.0 = real playback with sound · 1.3.x = research + Playback check · 1.2.3 = full-quality player · 1.2.2 = real filmstrips · 1.2.1 = iPhone thumbnail fix · 1.2.0 = media import & library |
+| **Delivered** | 2026-11-12 · 1.4.7 — **P8 received** (heavy-clip Playback check on the owner's iPhone: HEVC clips decode in 59 ms, hidden playback is perfect at 0.97×, visible/canvas paths drop 5–9 % of frames, scrubbing worst case 452 ms; plus two new bugs you reported — high-fps A/V desync and heavy-clip handling); docs-only set · 2026-11-12 · 1.4.6 — 1.4.2 phone-verified · 2026-11-12 · 1.4.5 cumulative change set (17 files to replace, 4 to delete) · 2026-11-12 · 1.4.2 + 1.4.3 cumulative set · 2026-11-09 · `freecut-phase-1b-1-1.zip` (full) and changes zip since 1.4.0 |
+| **Status** | 1.4.7 = 1.4.6's code (= 1.4.5's = 1.4.2's) + this record — **fully run here**: typecheck · lint · format · **459 tests in 41 files** · build, all green. **P8 is no longer open**: your heavy-clip Playback-check report is in (Handover §10). **Two new bugs** surfaced by the same report (high-fps A/V desync; heavy/high-bitrate clips not handled) are now 1b.2's actual scope. Still open: the red **End-to-end CI job's log** (N40). Earlier: 1.4.2's iOS scrub-then-Play fix is phone-verified ✔; 1.4.1's four fixes for the first phone test still stand |
+| **Next** | **1b.2 is now scoped from real device data** (no more "candidates"): (1) high-fps A/V desync — the audio-clock master loses the picture on high frame-rate clips (visible/canvas paths drop 5–9 % of frames); (2) heavy-clip handling — 1080p/4K, high-bitrate clips stutter and need a proxy path (which pulls **1c's proxy work** forward into 1b.2). Filmstrip image encode off the main thread and pre-warming the next clip at a cut stay as supporting items. The e2e log (N40) is still owed → then 1c (projects, sound for long files) → Phase 2 |
 
 ---
 
@@ -445,25 +445,64 @@ Unchanged: each phase ships the full zip (source only), updated docs, a **verifi
 
 ## 10. Review script — **iPhone Safari first**
 
-### Now (still open — the 1.4.2 question is answered, see the record below): retest steps on your iPhone / GitHub
+### Now (still open — only the e2e CI log is left): retest steps on your iPhone / GitHub
 
-**Before you start:** Low Power Mode **off**; volume up. Have **2–3 different videos** ready to import — different sizes and frame rates if you can (ideally one **4K** or **60 fps** clip).
+**Before you start:** Low Power Mode **off**; volume up. Have **2–3 different videos** ready to import — different sizes and frame rates if you can (a **60 fps** or **4K** clip is the priority now — see the bugs at the end of §10).
 
 | # | Do | Expect / tell me |
 |---|---|---|
 | P1 | **Me** tab | Shows **v1.4.1** (if not: fully close and reopen the tab/app twice) |
 | P2 | **The bad case from before:** import a *new* video, add it to the timeline and press **Play straight away** (don't wait). Let it run 20+ seconds | The picture should now look like **smooth video** and stay **in step with the sound**. *Tell me:* better, same or worse than before? any stutter, jumps, drifting? |
 | P3 | Same again with the **silent switch ON** | Same behaviour as P2 |
-| P4 | Try your **other videos** (other sizes / frame rates / the 4K or 60 fps one) | *Tell me which, if any, still stutter:* its size, frame rate, and how it looks |
-| P5 | **Pause**, then **scrub**: drag the timeline slowly, then fast, then stop | While moving the picture should keep up (it may show a nearby frame during a fast swipe); **about 0.2 s after you stop it should show the exact frame**. *Tell me if it still feels choppy* |
+| P4 | Try your **other videos** (other sizes / frame rates / the 4K or 60 fps one) | *Tell me which, if any, still stutter:* its size, frame rate, and how it looks. **A high-fps A/V desync and heavy-clip stutter were reported in the 1.4.5 Playback check — these are 1b.2's actual scope now** (see the bottom of §10) |
+| P5 | **Pause**, then **scrub**: drag the timeline slowly, then fast, then stop | While moving the picture should keep up (it may show a nearby frame during a fast swipe); **about 0.2 s after you stop it should show the exact frame**. *Tell me if it still feels choppy* (the heavy-clip report showed scrubbing worst case 452 ms — being tracked) |
 | P6 | **Zoom** with the +/− buttons, and with a **two-finger pinch** | Smoother than before? (Pinch now updates about 10 times a second rather than on every touch event) |
 | P7 | After adding a new video, **leave the timeline alone for ~10 s** | The clip's **filmstrip thumbnails appear** (they now wait until you stop playing/scrubbing — N47) |
-| P8 | *(if you can)* import your **biggest clip** (1080p/4K) and run **Me → Playback check**; **Copy report** or screenshot it | Gives me real **heavy-footage** numbers (decode, smooth-playing, copy, scrubbing) — the thing I could not measure |
+| P8 | ~~import your **biggest clip** (1080p/4K) and run **Me → Playback check**~~ | **✔ Done (2026-11-12).** The heavy-clip Playback-check report is in — recorded below in §10. It surfaced two new bugs (high-fps A/V desync; heavy/high-bitrate clips) that 1b.2 will address. *If you import an even bigger or differently-encoded clip and want to send another report, the panel is still there* |
 | P9 | **GitHub → Actions**: the first job (typecheck…build) should be ✔. For each red **End-to-end** job: open it → the red step → **screenshot the last ~30 lines** | N40 — I need the failing test names/messages |
 | P10 | If anything is still wrong, tell me **which video (size/fps), which action, and what you see**; a **screen recording** helps | |
 
+### 1.4.5 heavy-clip Playback check (2026-11-12) — report received; two new bugs surfaced
+
+Environment: same iPhone as before, **iOS 16.7, Safari 16.6, opened as a Home Screen app, 375×812 @3×, 4 cores.** Test clip: a **576×576, 68.7 s, 8.7 MB HEVC** `.mp4` — still small in pixels, but heavier in duration and bitrate than the earlier 36.5 s sample, and the report's matrix is the most complete we have.
+
+**Environment rows (unchanged unless noted):**
+
+| Row | Result |
+|---|---|
+| WebGL | ✔ WebGL 2, largest texture 16384 px |
+| Web Audio unlock | ✔ running right after the tap, 48000 Hz |
+| Silent-switch fix | ✔ `navigator.audioSession` present, reads back "playback" |
+| `canPlayType` | H.264 ✔ · HEVC ✔ (via `<video>`) · AAC ✔ · VP9 ✘ · AV1 ✘ · Opus ✘ · MP3/WAV/FLAC ~ |
+| WebCodecs | VideoDecoder ✔ VideoEncoder ✔ · AudioDecoder ✘ AudioEncoder ✘ |
+| **WebCodecs HEVC decode** | **✘ 1080p and 4K both rejected with "Config is not valid"** — same as 1.3.x; locks in "no WebCodecs for HEVC, use `<video>`" |
+| `requestVideoFrameCallback` | ✔ present |
+| Decode its sound | ✔ 59 ms (the clip's audio) |
+
+**Playback numbers (the new heavy-ish data):**
+
+| Row | Result |
+|---|---|
+| **Playing (hidden video)** | **✔ perfect**: 86 frames, **0 skipped**, clock **0.97×** overall |
+| Playing (visible video) | ⚠ 6 of 88 frames skipped (**7 %**); clock otherwise steady |
+| Playing (hidden again) | ⚠ 8 of 86 frames skipped (**9 %**) |
+| Playing + copy to canvas | ⚠ 4 of 87 frames skipped (**5 %**) |
+| Canvas copy, per frame | median **16 ms**, slowest 47 ms |
+| **Scrubbing (seek-to-`seeked`)** | median **71 ms**, **slowest 452 ms** |
+| WebGL upload | median 1 ms |
+
+**Reading:** hidden playback is perfect, so the decoder and audio clock can keep up — **the skipped frames happen only on the visible / canvas-painting path**, which is exactly the path the editor uses. The 452 ms scrubbing outlier matches what 1.4.1 measured for an unrelated `toBlob` freeze; scrubbing on heavy clips is still the worst single action. See `Knowledge_Contribution.md` L-059.
+
+**Two new bugs you reported alongside the numbers** (these become 1b.2's actual scope — see §Roadmap 1b.2 and L-060):
+
+1. **High-frame-rate video: picture too smooth, sound runs ahead of it.** On a high-fps clip the audio-clock master keeps the sound right, but the picture over-runs (decodes faster than the timeline wants) and **audio gets ahead of video**. Hypothesis (to confirm by measurement): the drift controller's dead-zone and `playbackRate` strategy in `engine/drift.ts` were tuned against ~30 fps clips; on 60 fps the per-frame step is half as large, so the picture crosses the dead zone more often and the controller's `±6 %` held correction overshoots. The "0 rate changes, ±0.018 s" claim from L-055 was measured on a 30 fps clip — it does **not** carry to 60 fps.
+
+2. **Heavy / high-quality video not handled.** High-resolution and high-bitrate clips stutter — i.e. the visible-path frame drops above are not just a measurement, they are a real editing experience problem on heavy footage. This is the same shape as Phase 1c's planned **proxy** work, so 1b.2 now pulls the proxy investigation forward (a low-res preview copy on import for heavy clips) rather than waiting for 1c.
+
+*Still open on the device:* the red End-to-end CI jobs' log (N40). The 1.4.2 scrub-then-Play result (picture appears ✔) is unaffected by any of this.
+
 ### 1.4.2 retest (2026-11-12) — result, for the record
-The one question this retest asked — **scrub the timeline, then tap Play: does the picture appear?** — came back **Yes** on the owner's iPhone. The 1.4.2 bug (sound with no picture after scrubbing) is **fixed and device-verified**; the fix (no `play()` until the seek completes, playback starting exactly from the playhead, and a stall watchdog as the safety net) is unchanged in 1.4.5/1.4.6, so the result carries. *Not covered by this answer:* heavy-clip behaviour (P8) and the End-to-end CI log (P9) — those are still open.
+The one question this retest asked — **scrub the timeline, then tap Play: does the picture appear?** — came back **Yes** on the owner's iPhone. The 1.4.2 bug (sound with no picture after scrubbing) is **fixed and device-verified**; the fix (no `play()` until the seek completes, playback starting exactly from the playhead, and a stall watchdog as the safety net) is unchanged in 1.4.5/1.4.6/1.4.7, so the result carries. *Not covered by this answer:* heavy-clip behaviour (P8 — **now received**, see the record above) and the End-to-end CI log (P9 — still open).
 
 ### First phone test of 1.4.0 (2026-11-09) — results, for the record
 Sound smooth (also on silent); a video with imported music: music smooth; **video picture not smooth / not staying in step — for all sizes and frame rates, also on silent; scrubbing the timeline and zooming very choppy.** → fixed as described in §1 (N41).
