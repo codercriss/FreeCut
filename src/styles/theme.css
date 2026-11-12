@@ -1,0 +1,146 @@
+/* ────────────────────────────────────────────────────────────────────────────
+   Design tokens for the whole app (Home + editor + shell bits). The palette lives
+   on <html> so every scope inherits it; the old local copies in .hm (home.css)
+   and .ve-app (editor.css) are gone, which is what makes one switch re-heat the
+   whole app. The attribute on <html> is data-theme="auto" | "dark" | "light":
+   · set before first paint by the tiny script in index.html (no flash of the
+     wrong theme), kept up to date by src/app/theme.ts;
+   · dark is the default — also what "auto" falls back to when the system
+     prefers dark, or says nothing;
+   · "auto" adopts the light palette when the system prefers light.
+   Deliberately NOT themed (they are content, not chrome): the video letterbox,
+   the demo footage scenes, the hero artwork, and the media-clip colours on the
+   timeline (teal video / blue audio) — your footage keeps its look in both
+   themes, like a video player.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  color-scheme: dark;
+  /* base */
+  --bg: #0f0f10;
+  --panel: #1a1a1c;
+  --panel-tl: #151516;
+  --side: #121213;
+  --line: #29292c;
+  --line-strong: #3a3a3e;
+  --field: #2a2a2d;
+  --field-hi: #37373b;
+  --input: #131315;
+  --text: #f4f4f5;
+  --text-soft: #d4d4d8;
+  --dim: #a6a6ab;
+  --faint: #6e6e73;
+  --accent: #12c6d8;
+  --on-accent: #04282c;
+  --accent-hover: #3ad6e6;
+  /* states and controls */
+  --hover: #242427;
+  --seg: #262629;
+  --seg-on: #3b3b3f;
+  --raised: #1f1f22;
+  --toast: #26262a;
+  --track: #47474c;
+  --fill: #e4e4e7;
+  --fill-2: #a9a9ae;
+  --tick: #9b9ba1;
+  --add-btn: #f2f2f3;
+  --add-btn-hi: #ffffff;
+  --shadow: rgba(0, 0, 0, 0.45);
+  /* status */
+  --ok: #35c76f;
+  --warn: #e9c13a;
+  --warn-dot: #e0a030;
+  --danger: #ec5b3b;
+  --danger-dot: #ff6b6b;
+  --ok-text: #4ade80;
+  --warn-text: #ffd699;
+  --danger-text: #ff8b8b;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  /* base */
+  --bg: #f2f2f5;
+  --panel: #ffffff;
+  --panel-tl: #eceef2;
+  --side: #e8eaf0;
+  --line: #dcdee6;
+  --line-strong: #c9ccd8;
+  --field: #e8eaf0;
+  --field-hi: #d9dce6;
+  --input: #f0f1f5;
+  --text: #191a22;
+  --text-soft: #3f4049;
+  --dim: #55565f;
+  --faint: #747572;
+  --accent: #0e7f8c;
+  --on-accent: #ffffff;
+  --accent-hover: #0ca2b4;
+  /* states and controls */
+  --hover: #e7e9f1;
+  --seg: #e2e4ec;
+  --seg-on: #ffffff;
+  --raised: #ffffff;
+  --toast: #ffffff;
+  --track: #cfd2dc;
+  --fill: #7a7d8c;
+  --fill-2: #9aa0b0;
+  --tick: #9aa0b0;
+  --add-btn: #ffffff;
+  --add-btn-hi: #eceef2;
+  --shadow: rgba(0, 0, 0, 0.16);
+  /* status */
+  --ok: #16a34a;
+  --warn: #ca8a04;
+  --warn-dot: #d97706;
+  --danger: #dc2626;
+  --danger-dot: #ef4444;
+  --ok-text: #15803d;
+  --warn-text: #9a6700;
+  --danger-text: #dc2626;
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] {
+    color-scheme: light;
+    /* base */
+    --bg: #f2f2f5;
+    --panel: #ffffff;
+    --panel-tl: #eceef2;
+    --side: #e8eaf0;
+    --line: #dcdee6;
+    --line-strong: #c9ccd8;
+    --field: #e8eaf0;
+    --field-hi: #d9dce6;
+    --input: #f0f1f5;
+    --text: #191a22;
+    --text-soft: #3f4049;
+    --dim: #55565f;
+    --faint: #747572;
+    --accent: #0e7f8c;
+    --on-accent: #ffffff;
+    --accent-hover: #0ca2b4;
+    /* states and controls */
+    --hover: #e7e9f1;
+    --seg: #e2e4ec;
+    --seg-on: #ffffff;
+    --raised: #ffffff;
+    --toast: #ffffff;
+    --track: #cfd2dc;
+    --fill: #7a7d8c;
+    --fill-2: #9aa0b0;
+    --tick: #9aa0b0;
+    --add-btn: #ffffff;
+    --add-btn-hi: #eceef2;
+    --shadow: rgba(0, 0, 0, 0.16);
+    /* status */
+    --ok: #16a34a;
+    --warn: #ca8a04;
+    --warn-dot: #d97706;
+    --danger: #dc2626;
+    --danger-dot: #ef4444;
+    --ok-text: #15803d;
+    --warn-text: #9a6700;
+    --danger-text: #dc2626;
+  }
+}

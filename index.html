@@ -15,7 +15,20 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="FreeCut" />
-    <title>FreeCut</title>
+    <script>
+      /* Theme (Me → Appearance): read the saved choice before first paint so the app never flashes
+         the wrong theme. src/app/theme.ts keeps the attribute and the meta tags up to date afterwards. */
+      (function () {
+        var t = "auto";
+        try {
+          var raw = JSON.parse(localStorage.getItem("freecut.prefs") || "null");
+          if (raw && (raw.theme === "dark" || raw.theme === "light")) t = raw.theme;
+        } catch (e) {
+          /* storage unavailable: stay on auto */
+        }
+        document.documentElement.dataset.theme = t;
+      })();
+    </script>
     <script>
       /* Safe-area insets only matter on iOS (notch / home indicator): flag iOS so Android and desktop always get 0. */
       (function () {
@@ -45,6 +58,14 @@
     </script>
     <style>
       :root { --safe-top: 0px; --safe-bottom: 0px; --page-min-h: 100dvh; }
+      /* The theme palette ships as a stylesheet; these two mirror it inline so the page's own
+         background (below) is right from the very first paint, before any CSS arrives.
+         Keep the values in step with theme.css (--bg / --panel, dark / light). */
+      :root { color-scheme: dark; --boot-a: #0f0f10; --boot-b: #1a1a1c; }
+      :root[data-theme="light"] { color-scheme: light; --boot-a: #f2f2f5; --boot-b: #ffffff; }
+      @media (prefers-color-scheme: light) {
+        :root[data-theme="auto"] { color-scheme: light; --boot-a: #f2f2f5; --boot-b: #ffffff; }
+      }
       /* iOS first measures the short height, so in the installed app we add the status-bar height back (+4px): the page is
          scrollable from the very first paint, and nothing on the page stops it stretching or bouncing. */
       html.standalone { --page-min-h: calc(100dvh + var(--safe-top) + 4px); }
@@ -55,7 +76,7 @@
       *::-webkit-scrollbar { display: none; width: 0; height: 0; }
       html, body, #root { margin: 0; padding: 0; }
       /* split background (top bar colour / bottom toolbar colour): any strip iOS doesn't cover blends into the nearest bar */
-      html { min-height: 100%; background: linear-gradient(#0f0f10 50%, #1a1a1c 50%); -webkit-text-size-adjust: 100%; -webkit-touch-callout: none; }
+      html { min-height: 100%; background: linear-gradient(var(--boot-a) 50%, var(--boot-b) 50%); -webkit-text-size-adjust: 100%; -webkit-touch-callout: none; }
       /* no elastic bounce / scroll chaining from the editor to the page behind it; the page itself stays scrollable, so the iOS viewport correction still works */
       html, body { overscroll-behavior: none; }
       /* every inner scroller too (timeline, sheets, grids): no rubber-band at their ends and no chaining to the page */

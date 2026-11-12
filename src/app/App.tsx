@@ -2,6 +2,8 @@ import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { PlaybackProvider } from "../engine/playback";
 import Home from "../home/Home";
 import { defaultSelection, projectDuration } from "../model/selectors";
+import { initTheme } from "./theme";
+import "../styles/theme.css";
 import "../styles/app.css";
 import "../styles/transitions.css";
 import { setSelection } from "../store/editorStore";
@@ -57,6 +59,10 @@ export default function App({ layout = "auto", bootFn = boot }: AppProps) {
     [store],
   );
   const { screen, leaving, nav, openEditor } = useScreenRouter(enterEditor);
+
+  // Appearance (Me → Appearance): index.html has already set <html data-theme> before the first
+  // paint; this keeps it — and the browser chrome (color-scheme / theme-color) — up to date.
+  useEffect(() => initTheme(), []);
 
   // Warm the editor chunk once Home is on screen and the browser is idle.
   useEffect(() => {

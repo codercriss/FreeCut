@@ -5,9 +5,9 @@
 | | |
 |---|---|
 | **Project** | FreeCut — browser-based video editor (PWA), aiming to be a free CapCut alternative |
-| **Version** | **v1.4.1** — Phase 1b.1 **patch: smoother picture, scrubbing and zoom** (from your first phone test) · 1.4.0 = real playback with sound · 1.3.x = research + Playback check · 1.2.3 = full-quality player · 1.2.2 = real filmstrips · 1.2.1 = iPhone thumbnail fix · 1.2.0 = media import & library |
-| **Delivered** | 2026-11-09 · `freecut-phase-1b-1-1.zip` (full) and `freecut-phase-1b-1-1-changes.zip` (only what changed since 1.4.0 — see `CHANGES.md`) |
-| **Status** | Your first phone test of 1.4.0: sound and music smooth; **picture not smooth / not in step; scrubbing and zoom choppy**. Four causes found by measuring the real app and fixed (§1). *Needs your phone retest* (§10 top). **CI (your screenshots):** the first job — typecheck, lint, format, unit tests, build — is ✔ on 1.4.0; both **End-to-end** jobs are red in every run back to the upload commits, i.e. *before* this work — I need their log (N40). ⚠ The full suite still could not be run here (N30) |
+| **Version** | **v1.4.3** — appearance switch (Me → Appearance: dark / light / auto) · 1.4.2 = iOS scrub-then-Play fix (sound without picture) · 1.4.1 = smoother picture, scrubbing and zoom · 1.4.0 = real playback with sound · 1.3.x = research + Playback check · 1.2.3 = full-quality player · 1.2.2 = real filmstrips · 1.2.1 = iPhone thumbnail fix · 1.2.0 = media import & library |
+| **Delivered** | 2026-11-12 · 1.4.2 + 1.4.3 as one cumulative change set (see `CHANGES.md`; if 1.4.2 was already uploaded, the same files simply replace themselves) · 2026-11-09 · `freecut-phase-1b-1-1.zip` (full) and changes zip since 1.4.0 |
+| **Status** | 1.4.2/1.4.3 built and **fully run here**: typecheck · lint · format · **467 tests in 43 files** · build, all green (the sandbox has npm for this release, unlike 1.4.0/1.4.1 — N30 resolved), and **both themes verified in a real browser** (phone + desktop layouts). 1.4.2 is reasoned from the code and WebKit reports, **not yet retested on an iPhone** — your scrub-then-Play retest decides. Earlier: 1.4.1's four fixes for your first phone test still stand |
 | **Next** | Your retest + the e2e log → 1b.2 (what still hurts: likely cuts, heavy clips, the filmstrip image encode) → 1c (projects, proxies, sound for long files) → Phase 2 |
 
 ---

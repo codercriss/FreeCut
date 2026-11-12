@@ -7,10 +7,14 @@ import {
   Home as HomeIcon,
   LayoutTemplate,
   Mic,
+  Monitor,
+  Moon,
   Plus,
   Play,
   RotateCcw,
   Scissors,
+  Sun,
+  SunMoon,
   Type,
   Upload,
   User,
@@ -24,6 +28,7 @@ import { projectDuration } from "../model/selectors";
 import { mmss } from "../model/time";
 import { saveStatusStore } from "../storage/autosave";
 import { useStore } from "../store/createStore";
+import { prefsStore, setTheme, THEMES, type Theme } from "../store/prefsStore";
 import { useProject } from "../store/ProjectContext";
 import { BrandMark } from "../ui/BrandMark";
 import { resetDemoProject } from "../app/actions";
@@ -68,6 +73,38 @@ function ResetDemoButton({ className }: { className?: string }) {
     >
       {armed ? "Tap again to confirm reset" : "Reset demo project"}
     </button>
+  );
+}
+
+/** The three-way appearance choice: Auto (follow the system) / Dark / Light. The palette itself is
+ * theme.css; `setTheme` only saves the pick (and `theme.ts` switches `<html data-theme>` live). */
+const THEME_ICONS: Record<Theme, typeof Sun> = { auto: Monitor, dark: Moon, light: Sun };
+
+export function ThemePicker({ className }: { className?: string }) {
+  const theme = useStore(prefsStore, (p) => p.theme);
+  return (
+    <span
+      className={`hm-theme-seg${className ? ` ${className}` : ""}`}
+      role="group"
+      aria-label="Appearance"
+    >
+      {THEMES.map((t) => {
+        const Icon = THEME_ICONS[t];
+        const on = theme === t;
+        return (
+          <button
+            key={t}
+            type="button"
+            className={on ? "on" : ""}
+            onClick={() => setTheme(t)}
+            aria-pressed={on}
+          >
+            <Icon size={13} strokeWidth={2} />
+            <span>{t === "auto" ? "Auto" : t === "dark" ? "Dark" : "Light"}</span>
+          </button>
+        );
+      })}
+    </span>
   );
 }
 
@@ -286,6 +323,11 @@ function MobileHome({ onOpen }: { onOpen: OpenFn }) {
                   <em>This device</em>
                 </li>
                 <li>
+                  <SunMoon size={18} strokeWidth={1.9} />
+                  <span>Appearance</span>
+                  <ThemePicker />
+                </li>
+                <li>
                   <Film size={18} strokeWidth={1.9} />
                   <span>About {BRAND_NAME}</span>
                   <em>v{__APP_VERSION__}</em>
@@ -363,6 +405,10 @@ function DesktopHome({ onOpen }: { onOpen: OpenFn }) {
             </button>
           ))}
         </nav>
+        <div className="hm-side-theme">
+          <span>Appearance</span>
+          <ThemePicker />
+        </div>
         <div className="hm-sidefoot">
           <WifiOff size={14} strokeWidth={2} />
           <span>Works offline</span>

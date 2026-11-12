@@ -1,13 +1,4 @@
 .hm {
-  --bg: #0f0f10;
-  --panel: #1a1a1c;
-  --line: #29292c;
-  --field: #2a2a2d;
-  --text: #f4f4f5;
-  --dim: #a6a6ab;
-  --faint: #6e6e73;
-  --accent: #12c6d8;
-  --on-accent: #04282c;
   box-sizing: border-box;
   background: var(--bg);
   color: var(--text);
@@ -160,7 +151,7 @@
   justify-content: center;
   aspect-ratio: 3/2;
   border-radius: 12px;
-  border: 1.5px dashed #3a3a40;
+  border: 1.5px dashed var(--line-strong);
   color: var(--dim);
 }
 .hm-note {
@@ -214,7 +205,7 @@
   max-width: 640px;
   min-height: 100%;
   margin: 0 auto;
-  box-shadow: 0 0 0 1px #1d1d20;
+  box-shadow: 0 0 0 1px var(--line);
 }
 .hm-pad {
   padding-left: var(--pl);
@@ -391,7 +382,7 @@
   font-size: 12.5px;
   line-height: 1.25;
   text-align: center;
-  color: #d9d9dd;
+  color: var(--text-soft);
 }
 .hm-tool i {
   display: flex;
@@ -402,7 +393,7 @@
   border-radius: 19px;
   background: var(--panel);
   box-shadow: inset 0 0 0 1px var(--line);
-  color: #ececef;
+  color: var(--text);
 }
 .hm-tool:active i {
   background: var(--field);
@@ -468,7 +459,7 @@
 .hm-list li + li {
   border-top: 1px solid var(--line);
 }
-.hm-list li span {
+.hm-list li > span {
   flex: 1;
 }
 .hm-list li em {
@@ -499,7 +490,7 @@
   height: 50px;
   font-size: 10.5px;
   font-weight: 500;
-  color: #8c8c92;
+  color: var(--dim);
 }
 .hm-tab.on {
   color: var(--text);
@@ -527,7 +518,7 @@
   flex-direction: column;
   width: 216px;
   padding: 18px 12px 14px;
-  background: #121213;
+  background: var(--side);
   border-right: 1px solid var(--line);
 }
 .hm-brand {
@@ -552,10 +543,10 @@
   padding: 0 10px;
   border-radius: 8px;
   font-size: 13.5px;
-  color: #b4b4b9;
+  color: var(--text-soft);
 }
 .hm-nav button:hover {
-  background: #1c1c1f;
+  background: var(--hover);
   color: var(--text);
 }
 .hm-nav button.on {
@@ -651,7 +642,7 @@
   font-weight: 700;
 }
 .hm-btn-main:hover {
-  background: #3ad6e6;
+  background: var(--accent-hover);
 }
 
 .hm-dsec {
@@ -682,8 +673,8 @@
   font-size: 13.5px;
 }
 .hm-qt:hover {
-  box-shadow: inset 0 0 0 1px #3d3d44;
-  background: #1e1e21;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  background: var(--hover);
 }
 .hm-qt i {
   display: flex;
@@ -694,7 +685,7 @@
   height: 34px;
   border-radius: 8px;
   background: var(--field);
-  color: #ececef;
+  color: var(--text);
 }
 .hm-grid {
   display: grid;
@@ -823,11 +814,47 @@
   overflow-wrap: anywhere;
 }
 .hm-check-row.ok .hm-check-mark {
-  color: #4ade80;
+  color: var(--ok-text);
 }
 .hm-check-row.warn .hm-check-mark {
-  color: #facc15;
+  color: var(--warn-text);
 }
 .hm-check-row.fail .hm-check-mark {
-  color: #f87171;
+  color: var(--danger-text);
+}
+
+/* Phase 1b.2: appearance picker — Me → Appearance, and the desktop sidebar. The three-way choice
+   is <ThemePicker> in Home.tsx; the palette it switches lives in theme.css. */
+.hm-theme-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--seg);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.hm-theme-seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dim);
+}
+.hm-theme-seg button.on {
+  background: var(--seg-on);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+.hm-side-theme {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px 10px 0;
+  font-size: 12px;
+  color: var(--dim);
 }
