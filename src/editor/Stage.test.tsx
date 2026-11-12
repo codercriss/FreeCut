@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Asset } from "../model/types";
 import { addAssets, addClipFromAsset } from "../store/commands";
 import { makeHarness } from "../test/harness";
@@ -158,6 +158,142 @@ describe("StageVideo", () => {
     unmount();
     expect(remove).toHaveBeenCalledWith("src");
     expect(HTMLMediaElement.prototype.load).toHaveBeenCalled();
+  });
+});
+
+/**
+ * The iOS-like video (Knowledge_Contribution L-035): a seek sets `seeking` until `land()`, `currentTime` reports a
+ * PENDING seek target at once (where iOS says it is going, not where the decoder is), frames appear only through the
+ * frame callback the test triggers (`present`), and `play()`/`pause()` are recorded. This is the shape of the bug:
+ * tap Play while the scrub's exact seek is still landing → the old code played straight into it and measured
+ * "really moving" from the pending target, so nothing was ever presented or reported and only the sound ran.
+ */
+function fakeVideo(v: HTMLVideoElement, ready = 1) {
+  const writes: number[] = [];
+  const plays = vi.fn(() => Promise.resolve());
+  const pauses = vi.fn();
+  const frameCbs: VideoFrameRequestCallback[] = [];
+  let t = 0;
+  let seek = false;
+  Object.defineProperty(v, "currentTime", {
+    get: () => t,
+    set: (x: number) => {
+      t = x; // iOS reports the pending target at once…
+      seek = true; // …but the seek is only done when `seeked` fires
+      writes.push(x);
+    },
+    configurable: true,
+  });
+  Object.defineProperty(v, "seeking", { get: () => seek, configurable: true });
+  Object.defineProperty(v, "readyState", { get: () => ready, configurable: true });
+  v.play = plays;
+  v.pause = pauses;
+  v.requestVideoFrameCallback = (cb) => {
+    frameCbs.push(cb);
+    return frameCbs.length;
+  };
+  v.cancelVideoFrameCallback = () => undefined;
+  return {
+    writes,
+    plays,
+    pauses,
+    /** the pending seek lands — `at` is where the decoder really is (e.g. a keyframe short of the target) */
+    land: (at?: number) =>
+      act(() => {
+        if (at !== undefined) t = at;
+        seek = false;
+        fireEvent.seeked(v);
+      }),
+    /** the compositor presents a frame at media time `mt` */
+    present: (mt: number) =>
+      act(() => {
+        for (const cb of [...frameCbs])
+          cb(performance.now(), {
+            expectedDisplayTime: 0,
+            mediaTime: mt,
+            presentedFrames: 1,
+            presentationTime: performance.now(),
+            width: 32,
+            height: 18,
+          });
+      }),
+  };
+}
+
+describe("StageVideo — starting playback after a scrub (the iOS bug)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const setupPlay = (props: Partial<React.ComponentProps<typeof StageVideo>> = {}) => {
+    const verify = vi.fn(() => "ok" as "ok" | "blank" | "error");
+    const onMoving = vi.fn();
+    const ui = (p: Partial<React.ComponentProps<typeof StageVideo>> = {}) => (
+      <StageVideo url="blob:v" timeSec={5} verify={verify} onMoving={onMoving} {...props} {...p} />
+    );
+    const r = render(ui());
+    const v = r.container.querySelector("video")!;
+    const fake = fakeVideo(v);
+    return {
+      v,
+      fake,
+      verify,
+      onMoving,
+      rerender: (p: Parameters<typeof ui>[0]) => r.rerender(ui(p)),
+    };
+  };
+
+  it("Play straight after a scrub waits for the seek to land — never plays into it — and anchors where it landed", () => {
+    const { v, fake, onMoving, rerender } = setupPlay();
+    act(() => void fireEvent.loadedMetadata(v)); // paused at 5, exact seek in flight
+    expect(fake.writes).toEqual([5]);
+    rerender({ playing: true }); // ← Play, with the scrub's seek still landing
+    expect(fake.plays).not.toHaveBeenCalled(); // never play() into a pending seek
+    // The seek lands — on a keyframe 0.9 s short of the target, as on long-GOP iPhone video.
+    fake.land(4.1);
+    expect(fake.plays).not.toHaveBeenCalled(); // still not: the video is not at the playhead yet (5)…
+    expect(fake.writes).toEqual([5, 5]); // …so the start re-seeks to the playhead and waits for THAT one
+    fake.land(5); // the re-seek lands, exactly at the playhead
+    expect(fake.plays).toHaveBeenCalledTimes(1); // and only now does it play
+    fake.present(5.05); // frames appear, from where playback really started (not from the old target 5)
+    expect(onMoving).toHaveBeenCalledWith(5.05);
+  });
+
+  it("Play with nothing pending plays at once and reports the first movement", () => {
+    const { v, fake, onMoving, rerender } = setupPlay({ timeSec: 3 });
+    act(() => void fireEvent.loadedMetadata(v));
+    fake.land(); // the seek landed long before Play: nothing is pending
+    rerender({ playing: true });
+    expect(fake.plays).toHaveBeenCalledTimes(1); // no re-seek, no waiting: it is already at the playhead
+    expect(fake.writes).toEqual([3]);
+    fake.present(3.06);
+    expect(onMoving).toHaveBeenCalledWith(3.06);
+  });
+
+  it("a stalled start (nothing ever presented) is re-asserted and restarted — twice, then it stops trying", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    const { v, fake, rerender } = setupPlay({ timeSec: 3 });
+    act(() => void fireEvent.loadedMetadata(v));
+    fake.land();
+    rerender({ playing: true });
+    expect(fake.plays).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(5000); // nothing is presented at all: the pipeline is stuck
+    expect(fake.plays).toHaveBeenCalledTimes(3); // restarted twice…
+    expect(fake.pauses).toHaveBeenCalled();
+    expect(fake.writes).toEqual([3]); // without piling up spurious seeks
+    vi.advanceTimersByTime(10000); // …and then it gives up (the poster stays, the sound carries on)
+    expect(fake.plays).toHaveBeenCalledTimes(3);
+  });
+
+  it("a `seeked` that never comes (lost by the browser) is not waited for forever", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    const { v, fake, rerender } = setupPlay({ timeSec: 5 });
+    act(() => void fireEvent.loadedMetadata(v)); // seek to 5 pending
+    rerender({ playing: true }); // Play into the pending seek: the start waits…
+    expect(fake.plays).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(2000); // …but the `seeked` never fires (seen on WebKit)
+    expect(fake.plays).toHaveBeenCalledTimes(1); // so the watchdog plays anyway, as a last resort
+    expect(fake.writes).toEqual([5]); // without seeking again first
   });
 });
 

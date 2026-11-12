@@ -71,6 +71,11 @@ interface StageVideoProps {
 /** A scrub is "in progress" until the playhead has been still for this long (milliseconds). */
 const SCRUB_SETTLE_MS = 160;
 
+/** While starting to play, nothing presented for this long (milliseconds) means the start is stuck. */
+const START_STALL_MS = 750;
+/** How often a starting playback is checked for being stuck (milliseconds). */
+const START_CHECK_MS = 250;
+
 /**
  * A native <video> showing `timeSec`. Paused: it chases `timeSec`; one seek is in flight at a time (so scrubbing
  * never piles up work on a phone) and when it lands we chase the latest target. While the playhead is moving fast,
@@ -80,6 +85,21 @@ const SCRUB_SETTLE_MS = 160;
  * beyond it, a jump only for big drift — driven by the video's own frame callback, not by React re-renders. It stays
  * invisible until a real, non-blank frame has been verified (a genuinely black first frame is accepted after a few
  * tries) or, when playing, until it is moving.
+ *
+ * The start of playback is careful on purpose (the iOS bug: scrub, tap Play → sound but no picture):
+ *  - never `play()` into a seek that is still in flight. Tapping Play right after a scrub races the exact seek that
+ *    lands the playhead, and on iOS `play()` during that seek can leave the element "playing" (`paused` false) with
+ *    no frame ever presented — `requestVideoFrameCallback` then never fires, so the video never reports itself
+ *    moving, never shows, and the sound (Web Audio) runs alone after the clock's wait. So a start waits for any
+ *    pending seek to land (`seeked`) first — including its own, below;
+ *  - playback starts exactly where the playhead is: Play cancels the scrub's settle seek (this very effect clears
+ *    its timer), which can leave the video on a keyframe near — but not at — the playhead. So a start re-seeks to
+ *    the playhead and waits for that seek to land, instead of playing from a keyframe seconds away;
+ *  - "really moving" is measured from where playback ACTUALLY starts (where the seek landed), not from
+ *    `currentTime` at Play time: iOS reports a pending seek target at once, while the decoder is still behind it —
+ *    measured from too far ahead, "moving" can never come true and the clock gives up waiting;
+ *  - if nothing has been presented for a moment after all that, the position is re-asserted and playback started
+ *    again (twice at most) — recovering a stalled start instead of freezing the picture while the sound runs.
  */
 export function StageVideo({
   url,
@@ -164,12 +184,20 @@ export function StageVideo({
     }
     const drift = newDriftState();
     v.playbackRate = speedRef.current;
-    const from = v.currentTime;
+    // Where the video really starts playing from — NOT simply `currentTime` at Play time (see the class comment).
+    // Re-anchored whenever a seek lands while the picture is not moving yet, and by every (re)start below.
+    let from = v.currentTime;
     let reported = false;
     let stopped = false;
     let handle = 0;
+    let recoveries = 0;
+    let launchPending = false;
+    let lastPresent = performance.now();
+    let watchdogTimer = 0;
+
     const step = (_now?: number, meta?: { mediaTime?: number }) => {
       if (stopped) return;
+      lastPresent = performance.now();
       const t = meta?.mediaTime ?? v.currentTime;
       if (!reported) {
         // Not while a seek is landing: its jump would look like movement and show a wrong frame.
@@ -188,14 +216,81 @@ export function StageVideo({
       if (hasCallback) return v.requestVideoFrameCallback(step);
       return requestAnimationFrame(step);
     };
-    handle = schedule();
-    // If play() is refused or interrupted, the clock simply times out waiting and carries on.
-    const started = v.play();
-    if (started) started.catch(() => undefined);
-    return () => {
-      stopped = true;
+    const cancel = () => {
       if (typeof v.cancelVideoFrameCallback === "function") v.cancelVideoFrameCallback(handle);
       else cancelAnimationFrame(handle);
+    };
+
+    // A seek that lands while the picture is not moving yet re-anchors "where it started from"; if a start was
+    // waiting for it (below), it goes ahead now. (A `seeked` that never arrives is covered by the watchdog.)
+    const onSeekedStart = () => {
+      if (reported || stopped) return;
+      from = v.currentTime;
+      if (launchPending) {
+        launchPending = false;
+        launch();
+      }
+    };
+    v.addEventListener("seeked", onSeekedStart);
+
+    /** Anchor to where the video really is and start it. Never `play()` into a seek that is still in flight (see
+     * the class comment); only the last-resort restart forces its way through. Starts exactly at the playhead: a
+     * start re-seeks first when the video is not already there (Play cancels the scrub's settle seek, which can
+     * leave it on a keyframe near the playhead) and waits for that seek to land. */
+    const launch = (force = false) => {
+      if (stopped || reported) return;
+      if (v.seeking && !force) {
+        launchPending = true; // `onSeekedStart` launches as soon as the seek lands
+        return;
+      }
+      const want = liveRef.current ? liveRef.current() : target.current;
+      if (!force && v.readyState >= 1 && Math.abs(v.currentTime - want) >= 0.05) {
+        seeking.current = true;
+        v.currentTime = want; // lands → onSeekedStart → launch: never play() into this one either
+        launchPending = true;
+        return;
+      }
+      launchPending = false;
+      from = v.currentTime;
+      lastPresent = performance.now();
+      cancel();
+      handle = schedule();
+      v.playbackRate = speedRef.current;
+      // If play() is refused or interrupted, the watchdog restarts it; if that fails too, the clock simply times
+      // out waiting and carries on without the picture.
+      const started = v.play();
+      if (started) started.catch(() => undefined);
+    };
+    launch();
+
+    /** Stall insurance: a start that has presented nothing for this long (no frame callback has run — on iOS that
+     * means no frame was composited) is stuck. Re-assert where the picture should be and start again: the first
+     * restart politely waits for its seek to land; the last one forces through a `seeked` that may never come.
+     * After two tries it gives up — the poster stays and the sound carries playback. */
+    const watchdog = () => {
+      if (stopped || reported) return;
+      if (performance.now() - lastPresent < START_STALL_MS) {
+        watchdogTimer = window.setTimeout(watchdog, START_CHECK_MS);
+        return;
+      }
+      if (recoveries >= 2) return; // gave up: the poster stays, the sound carries playback
+      recoveries += 1;
+      v.pause();
+      const want = liveRef.current ? liveRef.current() : target.current;
+      if (Math.abs(v.currentTime - want) >= 0.05) {
+        seeking.current = true;
+        v.currentTime = want; // lands → onSeekedStart → launch
+      }
+      launch(recoveries >= 2); // the last resort does not wait for a `seeked` that may never come
+      watchdogTimer = window.setTimeout(watchdog, START_CHECK_MS);
+    };
+    watchdogTimer = window.setTimeout(watchdog, START_CHECK_MS);
+
+    return () => {
+      stopped = true;
+      v.removeEventListener("seeked", onSeekedStart);
+      window.clearTimeout(watchdogTimer);
+      cancel();
       v.pause();
     };
   }, [playing]);
