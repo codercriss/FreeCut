@@ -5,10 +5,10 @@
 | | |
 |---|---|
 | **Project** | FreeCut — browser-based video editor (PWA), aiming to be a free CapCut alternative |
-| **Version** | **v1.4.5** — **removed** the appearance switcher (the dark / light / auto feature of 1.4.3–1.4.4); FreeCut is dark-only again, exactly the 1.4.2 look · 1.4.2 = iOS scrub-then-Play fix (sound without picture) · 1.4.1 = smoother picture, scrubbing and zoom · 1.4.0 = real playback with sound · 1.3.x = research + Playback check · 1.2.3 = full-quality player · 1.2.2 = real filmstrips · 1.2.1 = iPhone thumbnail fix · 1.2.0 = media import & library |
-| **Delivered** | 2026-11-12 · 1.4.5 as a cumulative change set (17 files to replace, 4 to delete — see `CHANGES.md`; rolls back 1.4.3 + 1.4.4 entirely) · 2026-11-12 · 1.4.2 + 1.4.3 as one cumulative change set · 2026-11-09 · `freecut-phase-1b-1-1.zip` (full) and changes zip since 1.4.0 |
-| **Status** | 1.4.5 built and **fully run here**: typecheck · lint · format · **459 tests in 41 files** · build, all green — the code is the 1.4.2 state plus the version/docs bump, so 1.4.2's caveat stands: the iOS scrub-then-Play fix is reasoned from the code and WebKit reports, **not yet retested on an iPhone** — your scrub-then-Play retest decides. Earlier: 1.4.1's four fixes for your first phone test still stand |
-| **Next** | Your retest + the e2e log → 1b.2 (what still hurts: likely cuts, heavy clips, the filmstrip image encode) → 1c (projects, proxies, sound for long files) → Phase 2 |
+| **Version** | **v1.4.6** — record-keeping release: **1.4.2's scrub-then-Play fix phone-verified ✔** (2026-11-12); code identical to 1.4.5 · 1.4.5 = appearance switcher removed, dark-only, exactly the 1.4.2 look · 1.4.2 = iOS scrub-then-Play fix · 1.4.1 = smoother picture, scrubbing and zoom · 1.4.0 = real playback with sound · 1.3.x = research + Playback check · 1.2.3 = full-quality player · 1.2.2 = real filmstrips · 1.2.1 = iPhone thumbnail fix · 1.2.0 = media import & library |
+| **Delivered** | 2026-11-12 · 1.4.6 — **1.4.2 is phone-verified** (your retest: scrub, then Play → the picture appears ✔); docs-only set · 2026-11-12 · 1.4.5 as a cumulative change set (17 files to replace, 4 to delete — rolls back 1.4.3 + 1.4.4 entirely) · 2026-11-12 · 1.4.2 + 1.4.3 as one cumulative change set · 2026-11-09 · `freecut-phase-1b-1-1.zip` (full) and changes zip since 1.4.0 |
+| **Status** | 1.4.6 = 1.4.5's code (which is 1.4.2's code) + this record — **fully run here**: typecheck · lint · format · **459 tests in 41 files** · build, all green. **1.4.2's iOS scrub-then-Play fix is now phone-verified** (2026-11-12: scrub, then Play — the picture appears ✔ on your iPhone). Still open: the red **End-to-end CI job's log** (N40) and **heavy-clip** (1080p/4K) Playback-check numbers (P8). Earlier: 1.4.1's four fixes for your first phone test still stand |
+| **Next** | **1b.2 is unblocked** (retest ✔): filmstrip image encode off the main thread · pre-warming the next clip at a cut · heavy-clip check — plus the e2e log (N40) → 1c (projects, proxies, sound for long files) → Phase 2 |
 
 ---
 
@@ -445,7 +445,7 @@ Unchanged: each phase ships the full zip (source only), updated docs, a **verifi
 
 ## 10. Review script — **iPhone Safari first**
 
-### Now (1.4.1, ≈ 12 min): retest on your iPhone
+### Now (still open — the 1.4.2 question is answered, see the record below): retest steps on your iPhone / GitHub
 
 **Before you start:** Low Power Mode **off**; volume up. Have **2–3 different videos** ready to import — different sizes and frame rates if you can (ideally one **4K** or **60 fps** clip).
 
@@ -461,6 +461,9 @@ Unchanged: each phase ships the full zip (source only), updated docs, a **verifi
 | P8 | *(if you can)* import your **biggest clip** (1080p/4K) and run **Me → Playback check**; **Copy report** or screenshot it | Gives me real **heavy-footage** numbers (decode, smooth-playing, copy, scrubbing) — the thing I could not measure |
 | P9 | **GitHub → Actions**: the first job (typecheck…build) should be ✔. For each red **End-to-end** job: open it → the red step → **screenshot the last ~30 lines** | N40 — I need the failing test names/messages |
 | P10 | If anything is still wrong, tell me **which video (size/fps), which action, and what you see**; a **screen recording** helps | |
+
+### 1.4.2 retest (2026-11-12) — result, for the record
+The one question this retest asked — **scrub the timeline, then tap Play: does the picture appear?** — came back **Yes** on the owner's iPhone. The 1.4.2 bug (sound with no picture after scrubbing) is **fixed and device-verified**; the fix (no `play()` until the seek completes, playback starting exactly from the playhead, and a stall watchdog as the safety net) is unchanged in 1.4.5/1.4.6, so the result carries. *Not covered by this answer:* heavy-clip behaviour (P8) and the End-to-end CI log (P9) — those are still open.
 
 ### First phone test of 1.4.0 (2026-11-09) — results, for the record
 Sound smooth (also on silent); a video with imported music: music smooth; **video picture not smooth / not staying in step — for all sizes and frame rates, also on silent; scrubbing the timeline and zooming very choppy.** → fixed as described in §1 (N41).
