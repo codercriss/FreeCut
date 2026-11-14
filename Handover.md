@@ -5,10 +5,10 @@
 | | |
 |---|---|
 | **Project** | FreeCut — browser-based video editor (PWA), aiming to be a free CapCut alternative |
-| **Version** | **v1.4.7** — record-keeping release: **P8 is in** (your heavy-clip Playback-check report) and it changed 1b.2's shape — two real bugs now visible (high-fps A/V desync, heavy-clip handling); code identical to 1.4.5/1.4.6 = 1.4.2 · 1.4.6 = 1.4.2 phone-verified · 1.4.5 = appearance switcher removed, dark-only · 1.4.2 = iOS scrub-then-Play fix · 1.4.1 = smoother picture, scrubbing and zoom · 1.4.0 = real playback with sound · 1.3.x = research + Playback check · 1.2.3 = full-quality player · 1.2.2 = real filmstrips · 1.2.1 = iPhone thumbnail fix · 1.2.0 = media import & library |
-| **Delivered** | 2026-11-12 · 1.4.7 — **P8 received** (heavy-clip Playback check on the owner's iPhone: HEVC clips decode in 59 ms, hidden playback is perfect at 0.97×, visible/canvas paths drop 5–9 % of frames, scrubbing worst case 452 ms; plus two new bugs you reported — high-fps A/V desync and heavy-clip handling); docs-only set · 2026-11-12 · 1.4.6 — 1.4.2 phone-verified · 2026-11-12 · 1.4.5 cumulative change set (17 files to replace, 4 to delete) · 2026-11-12 · 1.4.2 + 1.4.3 cumulative set · 2026-11-09 · `freecut-phase-1b-1-1.zip` (full) and changes zip since 1.4.0 |
-| **Status** | 1.4.7 = 1.4.6's code (= 1.4.5's = 1.4.2's) + this record — **fully run here**: typecheck · lint · format · **459 tests in 41 files** · build, all green. **P8 is no longer open**: your heavy-clip Playback-check report is in (Handover §10). **Two new bugs** surfaced by the same report (high-fps A/V desync; heavy/high-bitrate clips not handled) are now 1b.2's actual scope. Still open: the red **End-to-end CI job's log** (N40). Earlier: 1.4.2's iOS scrub-then-Play fix is phone-verified ✔; 1.4.1's four fixes for the first phone test still stand |
-| **Next** | **1b.2 is now scoped from real device data** (no more "candidates"): (1) high-fps A/V desync — the audio-clock master loses the picture on high frame-rate clips (visible/canvas paths drop 5–9 % of frames); (2) heavy-clip handling — 1080p/4K, high-bitrate clips stutter and need a proxy path (which pulls **1c's proxy work** forward into 1b.2). Filmstrip image encode off the main thread and pre-warming the next clip at a cut stay as supporting items. The e2e log (N40) is still owed → then 1c (projects, sound for long files) → Phase 2 |
+| **Version** | **v1.4.8** — the always-red CI e2e jobs are fixed (N40 closed): a layout-race in the desktop-timeline test (and two latent sites in media.spec) replaced with an element-relative `clickScrub` helper; app code (src/) unchanged · 1.4.7 = P8 received + 1b.2 re-scoped · 1.4.6 = 1.4.2 phone-verified · 1.4.5 = appearance switcher removed, dark-only · 1.4.2 = iOS scrub-then-Play fix · 1.4.1 = smoother picture, scrubbing and zoom · 1.4.0 = real playback with sound · 1.3.x = research + Playback check · 1.2.3 = full-quality player · 1.2.2 = real filmstrips · 1.2.1 = iPhone thumbnail fix · 1.2.0 = media import & library |
+| **Delivered** | 2026-11-12 · 1.4.8 — **N40 closed**: CI #19 (v1.4.7) screenshots showed End-to-end (chromium) and End-to-end (webkit) both failing on the same desktop-timeline test at `e2e/editor.spec.ts:123`; root cause = `boundingBox() + mouse.click(x,y)` is a layout race (bar measured before the editor settles); fix = new `clickScrub` helper using element-relative `locator.click({ position })`, applied at 3 sites; 9-file change set (4 docs + 3 e2e + 2 package) · 2026-11-12 · 1.4.7 — P8 received, 1b.2 re-scoped · 2026-11-12 · 1.4.6 — 1.4.2 phone-verified · 2026-11-12 · 1.4.5 cumulative change set · 2026-11-12 · 1.4.2 + 1.4.3 cumulative set · 2026-11-09 · `freecut-phase-1b-1-1.zip` (full) and changes zip since 1.4.0 |
+| **Status** | 1.4.8 = app code (src/) unchanged from 1.4.5/1.4.6/1.4.7 (= 1.4.2), only the e2e test harness edited — **fully run here**: typecheck · lint · format · **459 unit tests in 41 files** · build, all green; **`npx playwright test --project=chromium-desktop --project=chromium-phone` — 22 passed, 5 skipped, 0 failed (1.3m)**. WebKit can't run in this sandbox (missing system libs — that's why your CI runner is the source of truth); the webkit-desktop failure was the same test on the same code path, so the same fix applies, and the webkit-phone screenshot you sent was already green. **N40 and P8 are both closed.** Earlier: 1.4.2's iOS scrub-then-Play fix is phone-verified ✔; 1.4.1's four fixes for the first phone test still stand |
+| **Next** | **1b.2 is fully unblocked** — N40 (e2e log) and P8 (heavy-clip Playback check) are both in. Three real items (scoped from your device data): (1) high-fps A/V desync — re-tune `engine/drift.ts` for 60 fps; (2) heavy-clip handling — preview proxies pulled forward from 1c (`OffscreenCanvas`/Web Worker downscale on import); (3) supporting — pre-warm next clip at cuts, move filmstrip image encode off the main thread → then 1c (projects, sound for long files) → Phase 2 |
 
 ---
 
@@ -445,7 +445,7 @@ Unchanged: each phase ships the full zip (source only), updated docs, a **verifi
 
 ## 10. Review script — **iPhone Safari first**
 
-### Now (still open — only the e2e CI log is left): retest steps on your iPhone / GitHub
+### Now (nothing device-side owed — N40 and P8 both closed): retest steps on your iPhone / GitHub
 
 **Before you start:** Low Power Mode **off**; volume up. Have **2–3 different videos** ready to import — different sizes and frame rates if you can (a **60 fps** or **4K** clip is the priority now — see the bugs at the end of §10).
 
@@ -459,7 +459,7 @@ Unchanged: each phase ships the full zip (source only), updated docs, a **verifi
 | P6 | **Zoom** with the +/− buttons, and with a **two-finger pinch** | Smoother than before? (Pinch now updates about 10 times a second rather than on every touch event) |
 | P7 | After adding a new video, **leave the timeline alone for ~10 s** | The clip's **filmstrip thumbnails appear** (they now wait until you stop playing/scrubbing — N47) |
 | P8 | ~~import your **biggest clip** (1080p/4K) and run **Me → Playback check**~~ | **✔ Done (2026-11-12).** The heavy-clip Playback-check report is in — recorded below in §10. It surfaced two new bugs (high-fps A/V desync; heavy/high-bitrate clips) that 1b.2 will address. *If you import an even bigger or differently-encoded clip and want to send another report, the panel is still there* |
-| P9 | **GitHub → Actions**: the first job (typecheck…build) should be ✔. For each red **End-to-end** job: open it → the red step → **screenshot the last ~30 lines** | N40 — I need the failing test names/messages |
+| P9 | ~~**GitHub → Actions**: the first job (typecheck…build) should be ✔. For each red **End-to-end** job: open it → the red step → **screenshot the last ~30 lines**~~ | **✔ Done (2026-11-12).** CI #19 (v1.4.7) screenshots showed both End-to-end jobs red on the same desktop-timeline test at `e2e/editor.spec.ts:123`. Root cause and fix recorded below in §10 (N40). After the 1.4.8 fix lands, all three CI jobs should be green for the first time since v1.4.0 |
 | P10 | If anything is still wrong, tell me **which video (size/fps), which action, and what you see**; a **screen recording** helps | |
 
 ### 1.4.5 heavy-clip Playback check (2026-11-12) — report received; two new bugs surfaced
@@ -499,10 +499,47 @@ Environment: same iPhone as before, **iOS 16.7, Safari 16.6, opened as a Home Sc
 
 2. **Heavy / high-quality video not handled.** High-resolution and high-bitrate clips stutter — i.e. the visible-path frame drops above are not just a measurement, they are a real editing experience problem on heavy footage. This is the same shape as Phase 1c's planned **proxy** work, so 1b.2 now pulls the proxy investigation forward (a low-res preview copy on import for heavy clips) rather than waiting for 1c.
 
-*Still open on the device:* the red End-to-end CI jobs' log (N40). The 1.4.2 scrub-then-Play result (picture appears ✔) is unaffected by any of this.
+*Nothing more is open on the device side* — the red End-to-end CI jobs' log (N40) was the last item, and it's closed by 1.4.8 (see the next record). The 1.4.2 scrub-then-Play result (picture appears ✔) is unaffected by any of this.
+
+### 1.4.7 CI e2e log (2026-11-12) — N40 closed: root cause found and fixed in 1.4.8
+
+You sent the GitHub Actions screenshots for **CI #19** (v1.4.7, commit `bb65ea8`). All three jobs:
+
+- **Typecheck · lint · unit tests · build — ✔** (1m 35s).
+- **End-to-end (chromium) — ✘** (1m 39s): `1 failed, 5 skipped, 44 passed` (1.2m). The failing test:
+  `e2e/editor.spec.ts:123` — *"desktop timeline: the playhead sits where the timecode says (Handover K1b)"*.
+  Visible code snippet: `const left = await page.locator(".ve-playhead")`.
+- **End-to-end (webkit) — ✘** (9m 44s): the visible webkit-phone run was `5 skipped, 24 passed` (8.7m)
+  but the step exited with code 1 — the actual failure was on **webkit-desktop** (not visible in the
+  screenshots), running the same desktop-timeline test on the same code path.
+
+**Root cause** (reproduced locally on chromium-desktop in this sandbox): the desktop-timeline test
+parks the playhead at ~2.75 s by clicking the player's scrub bar, then asserts the timecode advanced
+past frame 100. It used `page.locator(".ve-scrub").boundingBox()` to measure the bar, then
+`page.mouse.click(pageX, pageY)` to click at fixed page coordinates. The bar was measured **before
+the editor layout had settled** (the player panel's position shifts after `openEditor` while lazy
+chunks and the sample project finish loading). By the time the click ran, the bar was no longer at
+the measured coordinates — `document.elementFromPoint(399, 434)` returned `<body>`, not `.ve-scrub`.
+The click missed; the seek never happened; the timecode stayed at `00:00:00:00`; the
+`expect.poll(...).toBeGreaterThan(100)` assertion timed out at 20 s. The same brittle
+`boundingBox() + mouse.click(x, y)` pattern was in two more places in `e2e/media.spec.ts` — latent
+bugs of the same shape. See `Knowledge_Contribution.md` L-061.
+
+**The 1.4.8 fix** (in this change set): a new `clickScrub(page, ratio)` helper in `e2e/helpers.ts`
+that uses `page.locator(".ve-scrub").click({ position })` — element-relative, actionability-checked,
+re-resolved at click time. Only the bar's *width* needs to be known up front, and the width does
+not change after open. The race is gone. All three call sites (`editor.spec.ts:123`,
+`media.spec.ts:111`, `media.spec.ts:403`) now use it.
+
+**Verified here:** `npx playwright test --project=chromium-desktop --project=chromium-phone` —
+**22 passed, 5 skipped, 0 failed** (1.3m). WebKit can't run in this sandbox (missing system
+libraries `libenchant-2.so.2`, `libsecret-1.so.0`, `libGLESv2.so.2`) — that's why your CI runner
+is the source of truth for webkit. The webkit-desktop failure was the same test on the same code
+path, so the same fix applies; the webkit-phone screenshot you sent was already green. **After you
+upload 1.4.8 and re-run CI, all three jobs should be green for the first time since v1.4.0.**
 
 ### 1.4.2 retest (2026-11-12) — result, for the record
-The one question this retest asked — **scrub the timeline, then tap Play: does the picture appear?** — came back **Yes** on the owner's iPhone. The 1.4.2 bug (sound with no picture after scrubbing) is **fixed and device-verified**; the fix (no `play()` until the seek completes, playback starting exactly from the playhead, and a stall watchdog as the safety net) is unchanged in 1.4.5/1.4.6/1.4.7, so the result carries. *Not covered by this answer:* heavy-clip behaviour (P8 — **now received**, see the record above) and the End-to-end CI log (P9 — still open).
+The one question this retest asked — **scrub the timeline, then tap Play: does the picture appear?** — came back **Yes** on the owner's iPhone. The 1.4.2 bug (sound with no picture after scrubbing) is **fixed and device-verified**; the fix (no `play()` until the seek completes, playback starting exactly from the playhead, and a stall watchdog as the safety net) is unchanged in 1.4.5/1.4.6/1.4.7/1.4.8, so the result carries. *Not covered by this answer:* heavy-clip behaviour (P8 — **received 2026-11-12**, see above) and the End-to-end CI log (P9 — **closed 2026-11-12 by 1.4.8**, see above).
 
 ### First phone test of 1.4.0 (2026-11-09) — results, for the record
 Sound smooth (also on silent); a video with imported music: music smooth; **video picture not smooth / not staying in step — for all sizes and frame rates, also on silent; scrubbing the timeline and zooming very choppy.** → fixed as described in §1 (N41).

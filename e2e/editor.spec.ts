@@ -1,5 +1,14 @@
 import { expect } from "@playwright/test";
-import { homeVisible, nowTimecode, openEditor, pause, saved, test, toFrame } from "./helpers";
+import {
+  clickScrub,
+  homeVisible,
+  nowTimecode,
+  openEditor,
+  pause,
+  saved,
+  test,
+  toFrame,
+} from "./helpers";
 
 test("opens the editor from Home with the sample project", async ({ page, isMobile }) => {
   await openEditor(page, !!isMobile);
@@ -128,8 +137,7 @@ test("desktop timeline: the playhead sits where the timecode says (Handover K1b)
   await openEditor(page, false);
   await pause(page);
   // park the playhead at ~2.75 s by clicking the scrub bar, so the check is meaningful (not just frame 0)
-  const bar = (await page.locator(".ve-scrub").boundingBox())!;
-  await page.mouse.click(bar.x + bar.width * (2.75 / 27.97), bar.y + bar.height / 2);
+  await clickScrub(page, 2.75 / 27.97);
   await expect.poll(async () => toFrame(await nowTimecode(page))).toBeGreaterThan(100);
   const frame = toFrame(await nowTimecode(page));
   const left = await page

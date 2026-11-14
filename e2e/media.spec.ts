@@ -2,7 +2,7 @@ import { expect, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { nowTimecode, openEditor, pause, saved, test, toFrame } from "./helpers";
+import { clickScrub, nowTimecode, openEditor, pause, saved, test, toFrame } from "./helpers";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fx = (name: string) => path.join(here, "fixtures", name);
@@ -108,8 +108,7 @@ test("add to timeline: the clip lands at the end, the project grows, the player 
       el.scrollLeft = (1700 / 60) * 28;
     });
   } else {
-    const box = (await page.locator(".ve-scrub").boundingBox())!;
-    await page.mouse.click(box.x + box.width * 0.99, box.y + box.height / 2);
+    await clickScrub(page, 0.99);
   }
   expect(toFrame(await nowTimecode(page))).toBeGreaterThanOrEqual(1678);
   await loaded(page.locator("img.ve-stage-img"));
@@ -400,8 +399,7 @@ async function seekToFrame(page: Page, isMobile: boolean, frame: number, totalFr
       .locator(".ve-mob-scroll")
       .evaluate((el, x) => void (el.scrollLeft = x), (frame / 60) * 28);
   } else {
-    const box = (await page.locator(".ve-scrub").boundingBox())!;
-    await page.mouse.click(box.x + box.width * (frame / totalFrames), box.y + box.height / 2);
+    await clickScrub(page, frame / totalFrames);
   }
 }
 
